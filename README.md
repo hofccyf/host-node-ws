@@ -1,15 +1,15 @@
 # WebSocket服务器部署工具
 
-这是一个模块化的WebSocket服务器部署工具，用于在共享主机环境中快速部署WebSocket服务和哪吒探针。
+这是一个简化的WebSocket服务器部署工具，用于在共享主机环境中快速部署WebSocket服务和哪吒探针。
 
 ## 特点
 
-- 模块化设计，分离WebSocket服务和哪吒探针功能
+- 简单易用的交互式菜单界面
 - 自动检测域名目录和Node.js环境
-- 配置信息集中管理，避免重复输入
-- 支持独立启动WebSocket服务和哪吒探针
+- 引导用户创建Node.js应用
+- 自动安装和配置WebSocket服务
+- 可选安装和配置哪吒探针
 - 详细的日志记录
-- 友好的交互式菜单界面
 
 ## 使用方法
 
@@ -33,12 +33,12 @@ curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh 
 
 1. **修改配置文件**：
    - 设置域名、节点名称、端口、UUID等配置信息
-   - 配置哪吒探针服务器地址和密钥
+   - 可选配置哪吒探针服务器地址和密钥
    - 所有配置信息保存在`~/tmp/ws_config/ws_config.conf`文件中
 
 2. **启动WebSocket代理服务**：
    - 自动创建index.js和package.json文件
-   - 检测Node.js环境并选择合适的版本
+   - 使用Node.js虚拟环境启动服务
    - 安装依赖并启动服务
 
 3. **启动哪吒探针**：
@@ -51,7 +51,7 @@ curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh 
 5. **强制重新安装**：
    - 停止所有相关进程
    - 删除所有相关文件
-   - 清理配置信息
+   - 清理配置信息和日志
 
 ## 配置选项
 
@@ -61,9 +61,22 @@ curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh 
 - **节点名称**：显示在订阅信息中的节点名称（默认：hostvps）
 - **监听端口**：WebSocket服务器监听的端口（默认：3000）
 - **UUID**：可以自动生成或手动输入，用于WebSocket连接验证
-- **哪吒服务器地址**：哪吒探针服务器地址（格式：nz.example.com:5555）
-- **哪吒客户端密钥**：哪吒探针的客户端密钥
+- **哪吒服务器地址**：哪吒探针服务器地址（可选）
+- **哪吒客户端密钥**：哪吒探针的客户端密钥（可选）
 - **TLS连接**：是否使用TLS连接哪吒服务器（默认：是）
+
+## 创建Node.js应用
+
+如果脚本检测到您尚未创建Node.js应用，它会引导您完成以下步骤：
+
+1. 进入控制面板 -> Node.js APP
+2. 点击"创建应用程序"
+3. Node.js版本: 选择最新版本
+4. Application root: domains/您的域名/public_html
+5. Application startup file: index.js
+6. 点击"创建"按钮
+
+创建完成后，重新运行脚本继续配置。
 
 ## 日志记录
 
@@ -82,7 +95,7 @@ https://您的域名/sub
 ## 常见问题
 
 1. **WebSocket服务无法启动**：
-   - 检查Node.js环境是否正确配置
+   - 确保已在控制面板中创建Node.js应用
    - 查看node.log文件了解错误信息
    - 确保端口未被占用
 
@@ -105,7 +118,7 @@ https://您的域名/sub
 - 脚本默认使用TLS连接哪吒服务器
 - 配置信息保存在`~/tmp/ws_config/ws_config.conf`文件中
 - 日志文件存储在`~/tmp/ws_setup_logs/`目录下
-- WebSocket服务和哪吒探针可以独立启动和管理
+- 强制重新安装会删除所有相关文件和日志
 
 ## 贡献
 

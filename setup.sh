@@ -52,14 +52,6 @@ username=$(whoami)
 print_info "检测到用户名: $username"
 log_debug "用户名: $username"
 
-# 检查domains目录
-domains_dir="/home/$username/domains"
-if [ ! -d "$domains_dir" ]; then
-    print_error "未找到domains目录: $domains_dir"
-    log_debug "domains目录不存在: $domains_dir"
-    exit 1
-fi
-
 # 检查配置文件是否存在
 check_config() {
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -147,10 +139,32 @@ show_status() {
     fi
 }
 
+# 引导用户创建Node.js应用
+guide_nodejs_creation() {
+    print_info "请按照以下步骤在控制面板中创建Node.js应用程序:"
+    echo "1. 进入控制面板 -> Node.js APP"
+    echo "2. 点击\"创建应用程序\""
+    echo "3. Node.js版本: 选择最新版本"
+    echo "4. Application root: domains/$1/public_html"
+    echo "5. Application startup file: index.js"
+    echo "6. 点击\"创建\"按钮"
+    echo ""
+    print_info "创建完成后，请重新运行此脚本"
+    log_debug "引导用户创建Node.js应用: $1"
+}
+
 # 修改配置文件
 modify_config() {
     print_info "修改配置文件..."
     log_debug "用户选择: 修改配置文件"
+
+    # 检查domains目录
+    domains_dir="/home/$username/domains"
+    if [ ! -d "$domains_dir" ]; then
+        print_error "未找到domains目录: $domains_dir"
+        log_debug "domains目录不存在: $domains_dir"
+        return 1
+    fi
 
     # 列出所有域名目录
     print_info "正在扫描域名目录..."
@@ -205,6 +219,14 @@ modify_config() {
     print_info "域名目录: $domain_dir"
     log_debug "确认域名目录: $domain_dir"
 
+    # 检查Node.js应用是否已创建
+    NODE_ENV_PATH="/home/$username/nodevenv/domains/$domain/public_html"
+    if [ ! -d "$NODE_ENV_PATH" ]; then
+        print_warning "未检测到Node.js应用环境，请先创建Node.js应用"
+        guide_nodejs_creation "$domain"
+        return 1
+    fi
+
     # 询问节点名称
     read -p "请输入节点名称 (默认: hostvps): " node_name
     node_name=${node_name:-"hostvps"}
@@ -240,32 +262,27 @@ modify_config() {
         log_debug "用户输入UUID: $uuid"
     fi
 
-    # 询问哪吒探针信息
-    read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555): " nezha_server
-    if [ -z "$nezha_server" ]; then
-        print_error "哪吒服务器地址不能为空！"
-        log_debug "用户未提供哪吒服务器地址，退出脚本"
-        return 1
-    fi
+    # 询问哪吒探针信息（可选）
+    read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555，可选): " nezha_server
     log_debug "用户输入哪吒服务器地址: $nezha_server"
 
-    read -p "请输入哪吒客户端密钥: " nezha_key
-    if [ -z "$nezha_key" ]; then
-        print_error "哪吒客户端密钥不能为空！"
-        log_debug "用户未提供哪吒客户端密钥，退出脚本"
-        return 1
-    fi
-    log_debug "用户输入哪吒客户端密钥"
+    if [ -n "$nezha_server" ]; then
+        read -p "请输入哪吒客户端密钥 (可选): " nezha_key
+        log_debug "用户输入哪吒客户端密钥"
 
-    # 询问是否使用TLS
-    read -p "是否使用TLS连接哪吒服务器? (Y/n, 默认: Y): " use_tls
-    use_tls=${use_tls:-"Y"}
-    if [[ $use_tls =~ ^[Yy]$ ]]; then
-        nezha_tls=true
-        log_debug "用户选择使用TLS连接"
+        # 询问是否使用TLS
+        read -p "是否使用TLS连接哪吒服务器? (Y/n, 默认: Y): " use_tls
+        use_tls=${use_tls:-"Y"}
+        if [[ $use_tls =~ ^[Yy]$ ]]; then
+            nezha_tls=true
+            log_debug "用户选择使用TLS连接"
+        else
+            nezha_tls=false
+            log_debug "用户选择不使用TLS连接"
+        fi
     else
-        nezha_tls=false
-        log_debug "用户选择不使用TLS连接"
+        nezha_key=""
+        nezha_tls=true
     fi
 
     # 保存配置到文件
@@ -303,7 +320,12 @@ start_websocket() {
     load_config
 
     # 检查Node.js应用是否已创建
-    print_info "检查Node.js应用是否已创建..."
+    NODE_ENV_PATH="/home/$username/nodevenv/domains/$DOMAIN/public_html"
+    if [ ! -d "$NODE_ENV_PATH" ]; then
+        print_warning "未检测到Node.js应用环境，请先创建Node.js应用"
+        guide_nodejs_creation "$DOMAIN"
+        return 1
+    fi
 
     # 创建index.js文件
     print_info "创建index.js文件..."
@@ -423,102 +445,37 @@ EOF
 EOF
     log_debug "已创建package.json文件"
 
-    # 检测Node.js环境
-    print_info "检测Node.js环境..."
-    NODE_ENV_PATH="/home/$username/nodevenv/domains/$DOMAIN/public_html"
-    log_debug "检查Node.js虚拟环境路径: $NODE_ENV_PATH"
-
-    # 检查是否存在Node.js虚拟环境
-    if [ -d "$NODE_ENV_PATH" ]; then
-        log_debug "找到Node.js虚拟环境目录"
-        # 列出可用的Node.js版本
-        NODE_VERSIONS=( $(ls -d "$NODE_ENV_PATH"/* 2>/dev/null | grep -o '[0-9]*$' | sort -nr) )
-        log_debug "检测到Node.js版本: ${NODE_VERSIONS[*]}"
-
-        if [ ${#NODE_VERSIONS[@]} -gt 0 ]; then
-            print_info "检测到以下Node.js版本:"
-            for i in "${!NODE_VERSIONS[@]}"; do
-                echo "[$i] ${NODE_VERSIONS[$i]}"
-            done
-
-            read -p "请选择Node.js版本 [0-$((${#NODE_VERSIONS[@]}-1))], 默认为0: " node_version_index
-            node_version_index=${node_version_index:-0}
-            log_debug "用户选择Node.js版本索引: $node_version_index"
-
-            if [ $node_version_index -ge 0 ] && [ $node_version_index -lt ${#NODE_VERSIONS[@]} ]; then
-                SELECTED_VERSION="${NODE_VERSIONS[$node_version_index]}"
-                NODE_ENV_ACTIVATE="$NODE_ENV_PATH/$SELECTED_VERSION/bin/activate"
-                log_debug "选择的Node.js版本: $SELECTED_VERSION, 激活脚本: $NODE_ENV_ACTIVATE"
-
-                print_info "使用Node.js版本: $SELECTED_VERSION"
-
-                # 停止现有进程
-                check_processes
-                if [ "$NODE_RUNNING" = true ]; then
-                    print_info "停止现有WebSocket服务进程..."
-                    kill $NODE_PID
-                    log_debug "已停止WebSocket服务进程，PID: $NODE_PID"
-                fi
-
-                # 安装依赖并启动服务
-                print_info "安装依赖并启动服务..."
-                cd "$DOMAIN_DIR"
-                source "$NODE_ENV_ACTIVATE"
-                npm install
-
-                # 启动Node.js应用
-                nohup node index.js > node.log 2>&1 &
-                echo $! > node.pid
-                print_success "WebSocket服务已启动，PID: $(cat node.pid)"
-                log_debug "已启动WebSocket服务，PID: $(cat node.pid)"
-            else
-                print_error "无效的选择！"
-                log_debug "用户选择了无效的Node.js版本索引: $node_version_index"
-                return 1
-            fi
-        else
-            print_warning "未找到Node.js虚拟环境版本"
-            log_debug "Node.js虚拟环境目录存在但未找到版本"
-            USE_SYSTEM_NODE=true
-        fi
-    else
-        print_warning "未找到Node.js虚拟环境，将尝试使用系统Node.js"
-        log_debug "未找到Node.js虚拟环境目录"
-        USE_SYSTEM_NODE=true
+    # 停止现有进程
+    check_processes
+    if [ "$NODE_RUNNING" = true ]; then
+        print_info "停止现有WebSocket服务进程..."
+        kill $NODE_PID
+        log_debug "已停止WebSocket服务进程，PID: $NODE_PID"
     fi
 
-    # 如果没有找到虚拟环境或用户选择使用系统Node.js
-    if [ "$USE_SYSTEM_NODE" = true ]; then
-        log_debug "尝试使用系统Node.js"
-        # 检查系统Node.js
-        if command -v node > /dev/null; then
-            NODE_VERSION=$(node -v)
-            print_info "使用系统Node.js版本: $NODE_VERSION"
-            log_debug "检测到系统Node.js版本: $NODE_VERSION"
+    # 获取Node.js虚拟环境激活脚本
+    NODE_VERSIONS=( $(ls -d "$NODE_ENV_PATH"/* 2>/dev/null | grep -o '[0-9]*$' | sort -nr) )
+    if [ ${#NODE_VERSIONS[@]} -gt 0 ]; then
+        SELECTED_VERSION="${NODE_VERSIONS[0]}"
+        NODE_ENV_ACTIVATE="$NODE_ENV_PATH/$SELECTED_VERSION/bin/activate"
+        print_info "使用Node.js版本: $SELECTED_VERSION"
+        log_debug "选择的Node.js版本: $SELECTED_VERSION, 激活脚本: $NODE_ENV_ACTIVATE"
 
-            # 停止现有进程
-            check_processes
-            if [ "$NODE_RUNNING" = true ]; then
-                print_info "停止现有WebSocket服务进程..."
-                kill $NODE_PID
-                log_debug "已停止WebSocket服务进程，PID: $NODE_PID"
-            fi
+        # 安装依赖并启动服务
+        print_info "安装依赖并启动服务..."
+        cd "$DOMAIN_DIR"
+        source "$NODE_ENV_ACTIVATE"
+        npm install
 
-            # 安装依赖并启动服务
-            print_info "安装依赖并启动服务..."
-            cd "$DOMAIN_DIR"
-            npm install
-
-            # 启动Node.js应用
-            nohup node index.js > node.log 2>&1 &
-            echo $! > node.pid
-            print_success "WebSocket服务已启动，PID: $(cat node.pid)"
-            log_debug "已启动WebSocket服务，PID: $(cat node.pid)"
-        else
-            print_error "未找到Node.js！请在控制面板中创建Node.js应用。"
-            log_debug "未找到系统Node.js"
-            return 1
-        fi
+        # 启动Node.js应用
+        nohup node index.js > node.log 2>&1 &
+        echo $! > node.pid
+        print_success "WebSocket服务已启动，PID: $(cat node.pid)"
+        log_debug "已启动WebSocket服务，PID: $(cat node.pid)"
+    else
+        print_error "未找到Node.js版本，请确保已正确创建Node.js应用"
+        log_debug "未找到Node.js版本"
+        return 1
     fi
 
     return 0
@@ -536,6 +493,13 @@ start_nezha() {
 
     # 加载配置
     load_config
+
+    # 检查哪吒探针配置
+    if [ -z "$NEZHA_SERVER" ] || [ -z "$NEZHA_KEY" ]; then
+        print_warning "哪吒探针配置不完整，请先修改配置文件"
+        log_debug "哪吒探针配置不完整: NEZHA_SERVER=$NEZHA_SERVER, NEZHA_KEY=$NEZHA_KEY"
+        return 1
+    fi
 
     # 停止现有哪吒探针进程
     check_processes
@@ -657,6 +621,11 @@ force_reinstall() {
         rm -rf "$HOME/nezha"
         log_debug "已删除 nezha 目录"
     fi
+
+    # 清理日志文件夹
+    rm -rf "$LOG_DIR"
+    mkdir -p "$LOG_DIR"
+    log_debug "已清理日志文件夹 $LOG_DIR"
 
     print_success "清理完成！"
     return 0

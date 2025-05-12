@@ -12,14 +12,14 @@ const { WebSocket, createWebSocketStream } = require('ws');
 
 
 
-const UUID = process.env.UUID || '';    // 必填.运行哪吒v1,在不同的平台需要改UUID,否则会被覆盖
+const UUID = process.env.UUID || '00000000-0000-0000-0000-000000000000';    // 必填.运行哪吒v1,在不同的平台需要改UUID,否则会被覆盖
 const NEZHA_SERVER = process.env.NEZHA_SERVER || '';    // 必填.哪吒v1填写形式：nz.abc.com:8008   哪吒v0填写形式：nz.abc.com
 const NEZHA_PORT = process.env.NEZHA_PORT || '';    // 哪吒v1没有此变量，v0的agent端口为{443,8443,2096,2087,2083,2053}其中之一时开启tls
 const NEZHA_KEY = process.env.NEZHA_KEY || '';  // 必填.v1的NZ_CLIENT_SECRET或v0的agent端口
-const DOMAIN = process.env.DOMAIN || '';    // 必填.填写项目域名或已反代的域名，不带前缀，建议填已反代的域名
+const DOMAIN = process.env.DOMAIN || 'freecloudus.kfcno.dpdns.org';    // 必填.填写项目域名或已反代的域名，不带前缀，建议填已反代的域名
 const AUTO_ACCESS = process.env.AUTO_ACCESS || true;   // 是否开启自动访问保活,false为关闭,true为开启,需同时填写DOMAIN变量
 const SUB_PATH = process.env.SUB_PATH || 'sub';     // 获取节点的订阅路径
-const NAME = process.env.NAME || '';  // 节点名称
+const NAME = process.env.NAME || 'FreeCloud';  // 节点名称
 const PORT = process.env.PORT || 3000;     // http和ws服务端口
 
 // 检查哪吒探针是否运行，如果没有则尝试重启
@@ -61,16 +61,30 @@ const httpServer = http.createServer((req, res) => {
     // 每次收到请求时检查哪吒探针状态
     checkAndRestartNezha();
 
+    // 记录请求信息，帮助调试
+    console.log(`收到请求: ${req.method} ${req.url}`);
+
+    // 处理/sub路径，不区分大小写
     if (req.url === '/') {
         res.writeHead(200, { 'Content-Type': 'text/plain' });
         res.end('Hello, World\n');
-    } else if (req.url === `/${SUB_PATH}`) {
-        const nodeName = `${NAME}`;
+    } else if (req.url.toLowerCase() === `/${SUB_PATH.toLowerCase()}`) {
+        console.log('处理订阅请求...');
+        console.log(`UUID: ${UUID}, DOMAIN: ${DOMAIN}, NAME: ${NAME}`);
+
+        const nodeName = NAME || 'NodeWS';
         const vlessURL = `vless://${UUID}@www.visa.com.tw:443?encryption=none&security=tls&sni=${DOMAIN}&type=ws&host=${DOMAIN}&path=%2F#${nodeName}`;
 
+        console.log(`生成的VLESS URL: ${vlessURL}`);
         const base64Content = Buffer.from(vlessURL).toString('base64');
+        console.log(`Base64编码后: ${base64Content}`);
 
-        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.writeHead(200, {
+            'Content-Type': 'text/plain',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        });
         res.end(base64Content + '\n');
     } else if (req.url === '/status') {
         // 添加状态检查端点
@@ -78,6 +92,16 @@ const httpServer = http.createServer((req, res) => {
             res.writeHead(200, { 'Content-Type': 'text/plain' });
             res.end(`服务状态:\n${stdout}\n`);
         });
+    } else if (req.url === '/debug') {
+        // 添加调试端点
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(`调试信息:
+UUID: ${UUID}
+DOMAIN: ${DOMAIN}
+SUB_PATH: ${SUB_PATH}
+NAME: ${NAME}
+PORT: ${PORT}
+`);
     } else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not Found\n');

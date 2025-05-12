@@ -7,21 +7,35 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# 打印带颜色的信息
+# 创建日志文件
+LOG_FILE="/tmp/setup_ws_$(date +%Y%m%d%H%M%S).log"
+touch "$LOG_FILE"
+echo "=== 安装日志开始 $(date) ===" > "$LOG_FILE"
+
+# 打印带颜色的信息并记录日志
 print_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[INFO] $(date +%H:%M:%S) $1" >> "$LOG_FILE"
 }
 
 print_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo "[SUCCESS] $(date +%H:%M:%S) $1" >> "$LOG_FILE"
 }
 
 print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo "[WARNING] $(date +%H:%M:%S) $1" >> "$LOG_FILE"
 }
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+    echo "[ERROR] $(date +%H:%M:%S) $1" >> "$LOG_FILE"
+}
+
+# 记录调试信息到日志
+log_debug() {
+    echo "[DEBUG] $(date +%H:%M:%S) $1" >> "$LOG_FILE"
 }
 
 # 获取用户名和域名路径
@@ -47,43 +61,121 @@ print_info "域名目录: $domain_dir"
 
 # 检查是否已安装
 INSTALLED=false
+INSTALLED_COMPONENTS=()
+
+log_debug "开始检测安装状态..."
+log_debug "域名目录: $domain_dir"
+
 # 检查文件是否存在
 if [ -f "$domain_dir/index.js" ]; then
     INSTALLED=true
+    INSTALLED_COMPONENTS+=("index.js")
+    log_debug "检测到 index.js 文件"
 fi
+
 if [ -f "$domain_dir/package.json" ]; then
     INSTALLED=true
+    INSTALLED_COMPONENTS+=("package.json")
+    log_debug "检测到 package.json 文件"
 fi
+
 if [ -d "$domain_dir/node_modules" ]; then
     INSTALLED=true
+    INSTALLED_COMPONENTS+=("node_modules目录")
+    log_debug "检测到 node_modules 目录"
 fi
+
 # 检查哪吒探针
 NEZHA_PATH="$HOME/nezha"
 if [ -d "$NEZHA_PATH" ]; then
     INSTALLED=true
+    INSTALLED_COMPONENTS+=("哪吒探针目录")
+    log_debug "检测到哪吒探针目录: $NEZHA_PATH"
 fi
+
 if [ -f "$domain_dir/agent.sh" ]; then
     INSTALLED=true
+    INSTALLED_COMPONENTS+=("agent.sh")
+    log_debug "检测到 agent.sh 文件"
+fi
+
+# 检查进程
+NODE_RUNNING=false
+NEZHA_RUNNING=false
+
+# 检查Node.js进程
+if [ -f "$domain_dir/node.pid" ]; then
+    NODE_PID=$(cat "$domain_dir/node.pid")
+    if ps -p $NODE_PID > /dev/null; then
+        NODE_RUNNING=true
+        log_debug "检测到正在运行的Node.js进程，PID: $NODE_PID"
+    else
+        log_debug "node.pid文件存在但进程不存在，PID: $NODE_PID"
+    fi
+fi
+
+# 检查哪吒探针进程
+NEZHA_PID=$(pgrep -u "$USER" -f "nezha-agent")
+if [ -n "$NEZHA_PID" ]; then
+    NEZHA_RUNNING=true
+    log_debug "检测到正在运行的哪吒探针进程，PID: $NEZHA_PID"
+fi
+
+# 记录检测结果
+if [ "$INSTALLED" = true ]; then
+    log_debug "检测到已安装组件: ${INSTALLED_COMPONENTS[*]}"
+    if [ "$NODE_RUNNING" = true ]; then
+        log_debug "Node.js进程正在运行"
+    fi
+    if [ "$NEZHA_RUNNING" = true ]; then
+        log_debug "哪吒探针进程正在运行"
+    fi
+else
+    log_debug "未检测到任何已安装组件"
 fi
 
 # 如果检测到任何安装痕迹
 if [ "$INSTALLED" = true ]; then
     print_warning "检测到系统中存在WebSocket服务或哪吒探针的安装痕迹！"
     echo ""
+    echo "检测到以下组件："
+    for component in "${INSTALLED_COMPONENTS[@]}"; do
+        echo "- $component"
+    done
+    echo ""
+
+    # 显示进程状态
+    echo "进程状态："
+    if [ "$NODE_RUNNING" = true ]; then
+        echo "- Node.js服务: 运行中 (PID: $NODE_PID)"
+    else
+        echo "- Node.js服务: 未运行"
+    fi
+
+    if [ "$NEZHA_RUNNING" = true ]; then
+        echo "- 哪吒探针: 运行中 (PID: $NEZHA_PID)"
+    else
+        echo "- 哪吒探针: 未运行"
+    fi
+    echo ""
+
     echo "请选择操作："
     echo "1. 修改配置文件"
     echo "2. 重启服务和探针"
     echo "3. 退出脚本"
+    echo "4. 强制重新安装（清除现有安装）"
     echo ""
-    read -p "请输入选项 [1-3]: " reinstall_option
+    read -p "请输入选项 [1-4]: " reinstall_option
 
     case $reinstall_option in
         1)
             print_info "继续修改配置文件..."
+            log_debug "用户选择: 修改配置文件"
             ;;
         2)
             # 重启服务
             print_info "正在重启服务..."
+            log_debug "用户选择: 重启服务和探针"
 
             # 停止现有Node.js进程
             if [ -f "$domain_dir/node.pid" ]; then
@@ -91,10 +183,14 @@ if [ "$INSTALLED" = true ]; then
                 if ps -p $NODE_PID > /dev/null; then
                     kill $NODE_PID
                     print_info "已停止Node.js进程 (PID: $NODE_PID)"
+                    log_debug "已停止Node.js进程 PID: $NODE_PID"
+                else
+                    log_debug "node.pid文件存在但进程不存在，PID: $NODE_PID"
                 fi
             else
                 pkill -f "node $domain_dir/index.js" 2>/dev/null
                 print_info "已尝试停止所有相关Node.js进程"
+                log_debug "尝试使用pkill停止Node.js进程"
             fi
 
             # 重启哪吒探针
@@ -105,20 +201,27 @@ if [ "$INSTALLED" = true ]; then
                 if [ -n "$pids" ]; then
                     kill $pids
                     print_info "已停止哪吒探针进程"
+                    log_debug "已停止哪吒探针进程，PID: $pids"
+                else
+                    log_debug "未检测到运行中的哪吒探针进程"
                 fi
 
                 # 询问哪吒探针信息
                 read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555): " nezha_server
                 if [ -z "$nezha_server" ]; then
                     print_error "哪吒服务器地址不能为空！"
+                    log_debug "用户未提供哪吒服务器地址，退出脚本"
                     exit 1
                 fi
+                log_debug "用户输入的哪吒服务器地址: $nezha_server"
 
                 read -p "请输入哪吒客户端密钥: " nezha_key
                 if [ -z "$nezha_key" ]; then
                     print_error "哪吒客户端密钥不能为空！"
+                    log_debug "用户未提供哪吒客户端密钥，退出脚本"
                     exit 1
                 fi
+                log_debug "用户已输入哪吒客户端密钥"
 
                 # 创建一个后台运行哪吒探针的脚本
                 cat > "$domain_dir/run_agent.sh" << EOF
@@ -127,33 +230,43 @@ cd "$domain_dir"
 env NZ_SERVER="$nezha_server" NZ_TLS=false NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
 EOF
                 chmod +x "$domain_dir/run_agent.sh"
+                log_debug "已创建run_agent.sh脚本"
 
                 # 启动探针
                 if [ -f "$domain_dir/run_agent.sh" ]; then
                     ./run_agent.sh
                     print_info "已重启哪吒探针"
+                    log_debug "已执行run_agent.sh启动哪吒探针"
                 else
                     print_warning "未找到run_agent.sh，无法自动重启探针"
+                    log_debug "run_agent.sh文件不存在，无法启动探针"
                 fi
             else
                 print_warning "未找到agent.sh，无法重启哪吒探针"
+                log_debug "agent.sh文件不存在，尝试下载"
+
                 # 下载agent.sh
                 print_info "下载哪吒探针安装脚本..."
                 curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/agent.sh -o "$domain_dir/agent.sh"
                 chmod +x "$domain_dir/agent.sh"
+                log_debug "已下载agent.sh并设置执行权限"
 
                 # 询问哪吒探针信息
                 read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555): " nezha_server
                 if [ -z "$nezha_server" ]; then
                     print_error "哪吒服务器地址不能为空！"
+                    log_debug "用户未提供哪吒服务器地址，退出脚本"
                     exit 1
                 fi
+                log_debug "用户输入的哪吒服务器地址: $nezha_server"
 
                 read -p "请输入哪吒客户端密钥: " nezha_key
                 if [ -z "$nezha_key" ]; then
                     print_error "哪吒客户端密钥不能为空！"
+                    log_debug "用户未提供哪吒客户端密钥，退出脚本"
                     exit 1
                 fi
+                log_debug "用户已输入哪吒客户端密钥"
 
                 # 创建一个后台运行哪吒探针的脚本
                 cat > "$domain_dir/run_agent.sh" << EOF
@@ -162,47 +275,130 @@ cd "$domain_dir"
 env NZ_SERVER="$nezha_server" NZ_TLS=false NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
 EOF
                 chmod +x "$domain_dir/run_agent.sh"
+                log_debug "已创建run_agent.sh脚本"
 
                 # 启动探针
                 cd "$domain_dir"
                 ./run_agent.sh
                 print_info "已启动哪吒探针"
+                log_debug "已执行run_agent.sh启动哪吒探针"
             fi
 
             # 重启Node.js应用
             print_info "正在重启Node.js应用..."
             NODE_ENV_PATH="/home/$username/nodevenv/domains/$domain/public_html"
             if [ -d "$NODE_ENV_PATH" ]; then
+                log_debug "检测到Node.js虚拟环境: $NODE_ENV_PATH"
                 # 查找激活脚本
                 ACTIVATE_SCRIPT=$(find "$NODE_ENV_PATH" -name "activate" | head -n 1)
                 if [ -n "$ACTIVATE_SCRIPT" ]; then
+                    log_debug "找到激活脚本: $ACTIVATE_SCRIPT"
                     cd "$domain_dir"
                     source "$ACTIVATE_SCRIPT"
                     nohup node index.js > node.log 2>&1 &
                     echo $! > node.pid
                     print_success "Node.js应用已重启，PID: $(cat node.pid)"
+                    log_debug "已使用虚拟环境启动Node.js应用，PID: $(cat node.pid)"
                 else
+                    log_debug "未找到激活脚本，使用普通方式启动"
                     cd "$domain_dir"
                     nohup node index.js > node.log 2>&1 &
                     echo $! > node.pid
                     print_success "Node.js应用已重启，PID: $(cat node.pid)"
+                    log_debug "已启动Node.js应用，PID: $(cat node.pid)"
                 fi
             else
+                log_debug "未检测到Node.js虚拟环境，使用系统Node.js"
                 cd "$domain_dir"
                 nohup node index.js > node.log 2>&1 &
                 echo $! > node.pid
                 print_success "Node.js应用已重启，PID: $(cat node.pid)"
+                log_debug "已使用系统Node.js启动应用，PID: $(cat node.pid)"
             fi
 
             print_success "服务和探针已重启完成！"
+            log_debug "重启服务和探针完成"
             exit 0
             ;;
         3)
             print_info "已取消操作，退出脚本。"
+            log_debug "用户选择退出脚本"
             exit 0
+            ;;
+        4)
+            print_info "准备强制重新安装..."
+            log_debug "用户选择强制重新安装"
+
+            # 停止并清理现有安装
+            print_info "正在清理现有安装..."
+
+            # 停止Node.js进程
+            if [ -f "$domain_dir/node.pid" ]; then
+                NODE_PID=$(cat "$domain_dir/node.pid")
+                if ps -p $NODE_PID > /dev/null; then
+                    kill $NODE_PID
+                    print_info "已停止Node.js进程 (PID: $NODE_PID)"
+                    log_debug "已停止Node.js进程 PID: $NODE_PID"
+                fi
+            else
+                pkill -f "node $domain_dir/index.js" 2>/dev/null
+                log_debug "尝试使用pkill停止Node.js进程"
+            fi
+
+            # 停止哪吒探针
+            pids=$(pgrep -u "$USER" -f "nezha-agent")
+            if [ -n "$pids" ]; then
+                kill $pids
+                print_info "已停止哪吒探针进程"
+                log_debug "已停止哪吒探针进程，PID: $pids"
+            fi
+
+            # 删除文件
+            print_info "删除现有文件..."
+            log_debug "开始删除文件"
+
+            if [ -f "$domain_dir/index.js" ]; then
+                rm "$domain_dir/index.js"
+                log_debug "已删除 index.js"
+            fi
+
+            if [ -f "$domain_dir/package.json" ]; then
+                rm "$domain_dir/package.json"
+                log_debug "已删除 package.json"
+            fi
+
+            if [ -f "$domain_dir/agent.sh" ]; then
+                rm "$domain_dir/agent.sh"
+                log_debug "已删除 agent.sh"
+            fi
+
+            if [ -f "$domain_dir/run_agent.sh" ]; then
+                rm "$domain_dir/run_agent.sh"
+                log_debug "已删除 run_agent.sh"
+            fi
+
+            if [ -f "$domain_dir/node.pid" ]; then
+                rm "$domain_dir/node.pid"
+                log_debug "已删除 node.pid"
+            fi
+
+            if [ -f "$domain_dir/start_node.sh" ]; then
+                rm "$domain_dir/start_node.sh"
+                log_debug "已删除 start_node.sh"
+            fi
+
+            if [ -f "$domain_dir/run_node.sh" ]; then
+                rm "$domain_dir/run_node.sh"
+                log_debug "已删除 run_node.sh"
+            fi
+
+            print_success "清理完成，继续执行安装流程..."
+            log_debug "清理完成，设置INSTALLED=false继续安装"
+            INSTALLED=false
             ;;
         *)
             print_error "无效选项，继续执行安装流程..."
+            log_debug "用户输入了无效选项: $reinstall_option"
             ;;
     esac
 fi
@@ -459,3 +655,17 @@ print_success "订阅地址: http://$domain:$port/sub"
 print_info "安装完成！"
 print_info "如需停止服务，请使用: kill $NODE_PID"
 print_info "如需卸载哪吒探针，请执行: cd $domain_dir && ./agent.sh uninstall"
+
+# 记录安装完成信息
+log_debug "安装过程完成"
+log_debug "Node.js PID: $NODE_PID"
+log_debug "域名目录: $domain_dir"
+log_debug "端口: $port"
+log_debug "UUID: $uuid"
+log_debug "节点名称: $node_name"
+log_debug "哪吒服务器: $nezha_server"
+
+# 显示日志文件位置
+echo ""
+print_info "安装日志已保存到: $LOG_FILE"
+echo "如果遇到问题，请查看日志文件以获取详细信息。"

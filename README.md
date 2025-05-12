@@ -124,11 +124,15 @@ https://您的域名/sub
 
 **系统重启后自动启动服务**：
 - 选择"Run on @reboot"选项
-- 命令：`cd $HOME && $HOME/setup.sh check_and_start_all > /dev/null 2>&1`
+- 命令（如果您选择"阻止电子邮件"选项）：`cd $HOME && $HOME/setup.sh check_and_start_all`
+- 命令（如果您不选择"阻止电子邮件"选项）：`cd $HOME && $HOME/setup.sh check_and_start_all > /dev/null 2>&1`
 
 **定期检查并重启服务**：
 - 频率：每5分钟（Cron表达式：`*/5 * * * *`）
-- 命令：`cd $HOME && $HOME/setup.sh check_and_start_all > /dev/null 2>&1`
+- 命令（如果您选择"阻止电子邮件"选项）：`cd $HOME && $HOME/setup.sh check_and_start_all`
+- 命令（如果您不选择"阻止电子邮件"选项）：`cd $HOME && $HOME/setup.sh check_and_start_all > /dev/null 2>&1`
+
+> **注意**：许多共享主机的控制面板在选择"阻止电子邮件"选项时会自动在命令末尾添加 `>/dev/null 2>&1`。如果您发现命令变成了 `cd $HOME && $HOME/setup.sh check_and_start_all > /dev/null 2>&1 >/dev/null 2>&1`，不用担心，这种重复的重定向不会影响脚本的正常执行。
 
 ### 自动保活工作原理
 

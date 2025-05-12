@@ -283,28 +283,59 @@ if [ "$INSTALLED" = true ]; then
                     log_debug "未检测到运行中的哪吒探针进程"
                 fi
 
-                # 询问哪吒探针信息
-                read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555): " nezha_server
-                if [ -z "$nezha_server" ]; then
-                    print_error "哪吒服务器地址不能为空！"
-                    log_debug "用户未提供哪吒服务器地址，退出脚本"
-                    exit 1
-                fi
-                log_debug "用户输入的哪吒服务器地址: $nezha_server"
+                # 检查是否有保存的配置文件
+                if [ -f "$domain_dir/nezha_config.conf" ]; then
+                    print_info "检测到已保存的哪吒探针配置，正在读取..."
+                    source "$domain_dir/nezha_config.conf"
+                    print_info "已读取配置: 服务器=$NEZHA_SERVER, TLS=$NEZHA_TLS"
+                    log_debug "从配置文件读取: 服务器=$NEZHA_SERVER, 密钥=$NEZHA_KEY, TLS=$NEZHA_TLS"
+                    nezha_server=$NEZHA_SERVER
+                    nezha_key=$NEZHA_KEY
+                    nezha_tls=$NEZHA_TLS
+                else
+                    # 询问哪吒探针信息
+                    read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555): " nezha_server
+                    if [ -z "$nezha_server" ]; then
+                        print_error "哪吒服务器地址不能为空！"
+                        log_debug "用户未提供哪吒服务器地址，退出脚本"
+                        exit 1
+                    fi
+                    log_debug "用户输入的哪吒服务器地址: $nezha_server"
 
-                read -p "请输入哪吒客户端密钥: " nezha_key
-                if [ -z "$nezha_key" ]; then
-                    print_error "哪吒客户端密钥不能为空！"
-                    log_debug "用户未提供哪吒客户端密钥，退出脚本"
-                    exit 1
+                    read -p "请输入哪吒客户端密钥: " nezha_key
+                    if [ -z "$nezha_key" ]; then
+                        print_error "哪吒客户端密钥不能为空！"
+                        log_debug "用户未提供哪吒客户端密钥，退出脚本"
+                        exit 1
+                    fi
+                    log_debug "用户已输入哪吒客户端密钥"
+
+                    # 询问是否使用TLS
+                    read -p "是否使用TLS连接哪吒服务器? (Y/n, 默认: Y): " use_tls
+                    use_tls=${use_tls:-"Y"}
+                    if [[ $use_tls =~ ^[Yy]$ ]]; then
+                        nezha_tls=true
+                        log_debug "用户选择使用TLS连接"
+                    else
+                        nezha_tls=false
+                        log_debug "用户选择不使用TLS连接"
+                    fi
+
+                    # 保存配置到文件，方便下次使用
+                    cat > "$domain_dir/nezha_config.conf" << EOF
+NEZHA_SERVER="$nezha_server"
+NEZHA_KEY="$nezha_key"
+NEZHA_TLS="$nezha_tls"
+EOF
+                    chmod 600 "$domain_dir/nezha_config.conf"
+                    log_debug "已保存哪吒探针配置到 $domain_dir/nezha_config.conf"
                 fi
-                log_debug "用户已输入哪吒客户端密钥"
 
                 # 创建一个后台运行哪吒探针的脚本
                 cat > "$domain_dir/run_agent.sh" << EOF
 #!/bin/bash
 cd "$domain_dir"
-env NZ_SERVER="$nezha_server" NZ_TLS=false NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
+env NZ_SERVER="$nezha_server" NZ_TLS=$nezha_tls NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
 EOF
                 chmod +x "$domain_dir/run_agent.sh"
                 log_debug "已创建run_agent.sh脚本"
@@ -328,28 +359,59 @@ EOF
                 chmod +x "$domain_dir/agent.sh"
                 log_debug "已下载agent.sh并设置执行权限"
 
-                # 询问哪吒探针信息
-                read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555): " nezha_server
-                if [ -z "$nezha_server" ]; then
-                    print_error "哪吒服务器地址不能为空！"
-                    log_debug "用户未提供哪吒服务器地址，退出脚本"
-                    exit 1
-                fi
-                log_debug "用户输入的哪吒服务器地址: $nezha_server"
+                # 检查是否有保存的配置文件
+                if [ -f "$domain_dir/nezha_config.conf" ]; then
+                    print_info "检测到已保存的哪吒探针配置，正在读取..."
+                    source "$domain_dir/nezha_config.conf"
+                    print_info "已读取配置: 服务器=$NEZHA_SERVER, TLS=$NEZHA_TLS"
+                    log_debug "从配置文件读取: 服务器=$NEZHA_SERVER, 密钥=$NEZHA_KEY, TLS=$NEZHA_TLS"
+                    nezha_server=$NEZHA_SERVER
+                    nezha_key=$NEZHA_KEY
+                    nezha_tls=$NEZHA_TLS
+                else
+                    # 询问哪吒探针信息
+                    read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555): " nezha_server
+                    if [ -z "$nezha_server" ]; then
+                        print_error "哪吒服务器地址不能为空！"
+                        log_debug "用户未提供哪吒服务器地址，退出脚本"
+                        exit 1
+                    fi
+                    log_debug "用户输入的哪吒服务器地址: $nezha_server"
 
-                read -p "请输入哪吒客户端密钥: " nezha_key
-                if [ -z "$nezha_key" ]; then
-                    print_error "哪吒客户端密钥不能为空！"
-                    log_debug "用户未提供哪吒客户端密钥，退出脚本"
-                    exit 1
+                    read -p "请输入哪吒客户端密钥: " nezha_key
+                    if [ -z "$nezha_key" ]; then
+                        print_error "哪吒客户端密钥不能为空！"
+                        log_debug "用户未提供哪吒客户端密钥，退出脚本"
+                        exit 1
+                    fi
+                    log_debug "用户已输入哪吒客户端密钥"
+
+                    # 询问是否使用TLS
+                    read -p "是否使用TLS连接哪吒服务器? (Y/n, 默认: Y): " use_tls
+                    use_tls=${use_tls:-"Y"}
+                    if [[ $use_tls =~ ^[Yy]$ ]]; then
+                        nezha_tls=true
+                        log_debug "用户选择使用TLS连接"
+                    else
+                        nezha_tls=false
+                        log_debug "用户选择不使用TLS连接"
+                    fi
+
+                    # 保存配置到文件，方便下次使用
+                    cat > "$domain_dir/nezha_config.conf" << EOF
+NEZHA_SERVER="$nezha_server"
+NEZHA_KEY="$nezha_key"
+NEZHA_TLS="$nezha_tls"
+EOF
+                    chmod 600 "$domain_dir/nezha_config.conf"
+                    log_debug "已保存哪吒探针配置到 $domain_dir/nezha_config.conf"
                 fi
-                log_debug "用户已输入哪吒客户端密钥"
 
                 # 创建一个后台运行哪吒探针的脚本
                 cat > "$domain_dir/run_agent.sh" << EOF
 #!/bin/bash
 cd "$domain_dir"
-env NZ_SERVER="$nezha_server" NZ_TLS=false NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
+env NZ_SERVER="$nezha_server" NZ_TLS=$nezha_tls NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
 EOF
                 chmod +x "$domain_dir/run_agent.sh"
                 log_debug "已创建run_agent.sh脚本"
@@ -480,6 +542,11 @@ EOF
                 log_debug "已删除 run_node.sh"
             fi
 
+            if [ -f "$domain_dir/nezha_config.conf" ]; then
+                rm "$domain_dir/nezha_config.conf"
+                log_debug "已删除 nezha_config.conf"
+            fi
+
             print_success "清理完成，继续执行安装流程..."
             log_debug "清理完成，设置INSTALLED=false继续安装"
             INSTALLED=false
@@ -543,6 +610,26 @@ if [ -z "$nezha_key" ]; then
 fi
 log_debug "用户输入哪吒客户端密钥"
 
+# 询问是否使用TLS
+read -p "是否使用TLS连接哪吒服务器? (Y/n, 默认: Y): " use_tls
+use_tls=${use_tls:-"Y"}
+if [[ $use_tls =~ ^[Yy]$ ]]; then
+    nezha_tls=true
+    log_debug "用户选择使用TLS连接"
+else
+    nezha_tls=false
+    log_debug "用户选择不使用TLS连接"
+fi
+
+# 保存配置到文件，方便重启时使用
+cat > "$domain_dir/nezha_config.conf" << EOF
+NEZHA_SERVER="$nezha_server"
+NEZHA_KEY="$nezha_key"
+NEZHA_TLS="$nezha_tls"
+EOF
+chmod 600 "$domain_dir/nezha_config.conf"
+log_debug "已保存哪吒探针配置到 $domain_dir/nezha_config.conf"
+
 # 确认信息
 echo ""
 print_info "=== 配置信息确认 ==="
@@ -552,6 +639,7 @@ echo "节点名称: $node_name"
 echo "UUID: $uuid"
 echo "哪吒服务器: $nezha_server"
 echo "哪吒密钥: $nezha_key"
+echo "使用TLS连接: $nezha_tls"
 echo "========================="
 
 read -p "确认以上信息正确? (Y/n, 默认: Y): " confirm
@@ -624,10 +712,10 @@ log_debug "成功下载agent.sh并设置执行权限"
 cat > "$domain_dir/run_agent.sh" << EOF
 #!/bin/bash
 cd "$domain_dir"
-env NZ_SERVER="$nezha_server" NZ_TLS=false NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
+env NZ_SERVER="$nezha_server" NZ_TLS=$nezha_tls NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
 EOF
 chmod +x "$domain_dir/run_agent.sh"
-log_debug "成功创建run_agent.sh脚本"
+log_debug "成功创建run_agent.sh脚本，TLS设置为: $nezha_tls"
 
 # 运行哪吒探针
 print_info "启动哪吒探针..."

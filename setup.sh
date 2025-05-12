@@ -702,5 +702,71 @@ main() {
     show_menu
 }
 
+# 检查并启动所有服务（用于Cron任务）
+check_and_start_all() {
+    # 创建日志目录（如果不存在）
+    mkdir -p "$LOG_DIR"
+
+    # 加载配置
+    if [ -f "$CONFIG_FILE" ]; then
+        source "$CONFIG_FILE"
+
+        # 检查并启动哪吒探针
+        NEZHA_PID=$(pgrep -u "$USER" -f "nezha-agent")
+        if [ -z "$NEZHA_PID" ] && [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_KEY" ]; then
+            # 下载agent.sh（如果不存在）
+            if [ ! -f "$HOME/agent.sh" ]; then
+                cd "$HOME"
+                curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/refs/heads/main/agent.sh -o agent.sh && chmod +x agent.sh
+            fi
+
+            # 启动哪吒探针
+            cd "$HOME"
+            env NZ_SERVER="$NEZHA_SERVER" NZ_TLS=$NEZHA_TLS NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 哪吒探针已启动" >> "$LOG_DIR/cron_autorestart.log"
+        fi
+
+        # 检查并启动WebSocket服务
+        if [ -n "$DOMAIN" ] && [ -n "$DOMAIN_DIR" ]; then
+            NODE_RUNNING=false
+
+            # 检查lsnode进程
+            LSNODE_PATTERN="lsnode:$DOMAIN_DIR"
+            LSNODE_PID=$(ps aux | grep "$LSNODE_PATTERN" | grep -v grep | awk '{print $2}')
+            if [ -n "$LSNODE_PID" ]; then
+                NODE_RUNNING=true
+            else
+                # 备用检查：检查node.pid文件
+                if [ -f "$DOMAIN_DIR/node.pid" ]; then
+                    NODE_PID=$(cat "$DOMAIN_DIR/node.pid")
+                    if ps -p $NODE_PID > /dev/null; then
+                        NODE_RUNNING=true
+                    fi
+                fi
+
+                # 再次尝试检查node进程
+                NODE_PROCESS_PID=$(ps aux | grep "node $DOMAIN_DIR/index.js" | grep -v grep | awk '{print $2}')
+                if [ -n "$NODE_PROCESS_PID" ]; then
+                    NODE_RUNNING=true
+                fi
+            fi
+
+            # 如果WebSocket服务未运行，尝试通过curl访问订阅地址来启动它
+            if [ "$NODE_RUNNING" = false ]; then
+                curl -s -o /dev/null "https://$DOMAIN/sub"
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试通过访问订阅地址启动WebSocket服务" >> "$LOG_DIR/cron_autorestart.log"
+            fi
+        fi
+    else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 配置文件不存在，无法启动服务" >> "$LOG_DIR/cron_autorestart.log"
+    fi
+}
+
+# 处理命令行参数
+if [ "$1" = "check_and_start_all" ]; then
+    check_and_start_all
+    exit 0
+fi
+
 # 执行主函数
 main

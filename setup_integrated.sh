@@ -47,95 +47,164 @@ print_info "域名目录: $domain_dir"
 
 # 检查是否已安装
 INSTALLED=false
-if [ -f "$domain_dir/index.js" ] && [ -f "$domain_dir/package.json" ] && [ -d "$domain_dir/node_modules" ]; then
-    NEZHA_PATH="$HOME/nezha"
-    if [ -d "$NEZHA_PATH" ] || [ -f "$domain_dir/agent.sh" ]; then
-        INSTALLED=true
-        print_warning "检测到系统已安装WebSocket服务和哪吒探针！"
-        echo ""
-        echo "请选择操作："
-        echo "1. 修改配置文件"
-        echo "2. 重启服务和探针"
-        echo "3. 退出脚本"
-        echo ""
-        read -p "请输入选项 [1-3]: " reinstall_option
+# 检查文件是否存在
+if [ -f "$domain_dir/index.js" ]; then
+    INSTALLED=true
+fi
+if [ -f "$domain_dir/package.json" ]; then
+    INSTALLED=true
+fi
+if [ -d "$domain_dir/node_modules" ]; then
+    INSTALLED=true
+fi
+# 检查哪吒探针
+NEZHA_PATH="$HOME/nezha"
+if [ -d "$NEZHA_PATH" ]; then
+    INSTALLED=true
+fi
+if [ -f "$domain_dir/agent.sh" ]; then
+    INSTALLED=true
+fi
 
-        case $reinstall_option in
-            1)
-                print_info "继续修改配置文件..."
-                ;;
-            2)
-                # 重启服务
-                print_info "正在重启服务..."
+# 如果检测到任何安装痕迹
+if [ "$INSTALLED" = true ]; then
+    print_warning "检测到系统中存在WebSocket服务或哪吒探针的安装痕迹！"
+    echo ""
+    echo "请选择操作："
+    echo "1. 修改配置文件"
+    echo "2. 重启服务和探针"
+    echo "3. 退出脚本"
+    echo ""
+    read -p "请输入选项 [1-3]: " reinstall_option
 
-                # 停止现有Node.js进程
-                if [ -f "$domain_dir/node.pid" ]; then
-                    NODE_PID=$(cat "$domain_dir/node.pid")
-                    if ps -p $NODE_PID > /dev/null; then
-                        kill $NODE_PID
-                        print_info "已停止Node.js进程 (PID: $NODE_PID)"
-                    fi
+    case $reinstall_option in
+        1)
+            print_info "继续修改配置文件..."
+            ;;
+        2)
+            # 重启服务
+            print_info "正在重启服务..."
+
+            # 停止现有Node.js进程
+            if [ -f "$domain_dir/node.pid" ]; then
+                NODE_PID=$(cat "$domain_dir/node.pid")
+                if ps -p $NODE_PID > /dev/null; then
+                    kill $NODE_PID
+                    print_info "已停止Node.js进程 (PID: $NODE_PID)"
+                fi
+            else
+                pkill -f "node $domain_dir/index.js" 2>/dev/null
+                print_info "已尝试停止所有相关Node.js进程"
+            fi
+
+            # 重启哪吒探针
+            print_info "正在重启哪吒探针..."
+            if [ -f "$domain_dir/agent.sh" ]; then
+                cd "$domain_dir"
+                pids=$(pgrep -u "$USER" -f "nezha-agent")
+                if [ -n "$pids" ]; then
+                    kill $pids
+                    print_info "已停止哪吒探针进程"
+                fi
+
+                # 询问哪吒探针信息
+                read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555): " nezha_server
+                if [ -z "$nezha_server" ]; then
+                    print_error "哪吒服务器地址不能为空！"
+                    exit 1
+                fi
+
+                read -p "请输入哪吒客户端密钥: " nezha_key
+                if [ -z "$nezha_key" ]; then
+                    print_error "哪吒客户端密钥不能为空！"
+                    exit 1
+                fi
+
+                # 创建一个后台运行哪吒探针的脚本
+                cat > "$domain_dir/run_agent.sh" << EOF
+#!/bin/bash
+cd "$domain_dir"
+env NZ_SERVER="$nezha_server" NZ_TLS=false NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
+EOF
+                chmod +x "$domain_dir/run_agent.sh"
+
+                # 启动探针
+                if [ -f "$domain_dir/run_agent.sh" ]; then
+                    ./run_agent.sh
+                    print_info "已重启哪吒探针"
                 else
-                    pkill -f "node $domain_dir/index.js" 2>/dev/null
-                    print_info "已尝试停止所有相关Node.js进程"
+                    print_warning "未找到run_agent.sh，无法自动重启探针"
+                fi
+            else
+                print_warning "未找到agent.sh，无法重启哪吒探针"
+                # 下载agent.sh
+                print_info "下载哪吒探针安装脚本..."
+                curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/agent.sh -o "$domain_dir/agent.sh"
+                chmod +x "$domain_dir/agent.sh"
+
+                # 询问哪吒探针信息
+                read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555): " nezha_server
+                if [ -z "$nezha_server" ]; then
+                    print_error "哪吒服务器地址不能为空！"
+                    exit 1
                 fi
 
-                # 重启哪吒探针
-                print_info "正在重启哪吒探针..."
-                if [ -f "$domain_dir/agent.sh" ]; then
+                read -p "请输入哪吒客户端密钥: " nezha_key
+                if [ -z "$nezha_key" ]; then
+                    print_error "哪吒客户端密钥不能为空！"
+                    exit 1
+                fi
+
+                # 创建一个后台运行哪吒探针的脚本
+                cat > "$domain_dir/run_agent.sh" << EOF
+#!/bin/bash
+cd "$domain_dir"
+env NZ_SERVER="$nezha_server" NZ_TLS=false NZ_UUID="$uuid" NZ_CLIENT_SECRET="$nezha_key" ./agent.sh > /dev/null 2>&1 &
+EOF
+                chmod +x "$domain_dir/run_agent.sh"
+
+                # 启动探针
+                cd "$domain_dir"
+                ./run_agent.sh
+                print_info "已启动哪吒探针"
+            fi
+
+            # 重启Node.js应用
+            print_info "正在重启Node.js应用..."
+            NODE_ENV_PATH="/home/$username/nodevenv/domains/$domain/public_html"
+            if [ -d "$NODE_ENV_PATH" ]; then
+                # 查找激活脚本
+                ACTIVATE_SCRIPT=$(find "$NODE_ENV_PATH" -name "activate" | head -n 1)
+                if [ -n "$ACTIVATE_SCRIPT" ]; then
                     cd "$domain_dir"
-                    pids=$(pgrep -u "$USER" -f "nezha-agent")
-                    if [ -n "$pids" ]; then
-                        kill $pids
-                        print_info "已停止哪吒探针进程"
-                    fi
-
-                    # 启动探针
-                    if [ -f "$domain_dir/run_agent.sh" ]; then
-                        ./run_agent.sh
-                        print_info "已重启哪吒探针"
-                    else
-                        print_warning "未找到run_agent.sh，无法自动重启探针"
-                    fi
-                fi
-
-                # 重启Node.js应用
-                print_info "正在重启Node.js应用..."
-                NODE_ENV_PATH="/home/$username/nodevenv/domains/$domain/public_html"
-                if [ -d "$NODE_ENV_PATH" ]; then
-                    # 查找激活脚本
-                    ACTIVATE_SCRIPT=$(find "$NODE_ENV_PATH" -name "activate" | head -n 1)
-                    if [ -n "$ACTIVATE_SCRIPT" ]; then
-                        cd "$domain_dir"
-                        source "$ACTIVATE_SCRIPT"
-                        nohup node index.js > node.log 2>&1 &
-                        echo $! > node.pid
-                        print_success "Node.js应用已重启，PID: $(cat node.pid)"
-                    else
-                        cd "$domain_dir"
-                        nohup node index.js > node.log 2>&1 &
-                        echo $! > node.pid
-                        print_success "Node.js应用已重启，PID: $(cat node.pid)"
-                    fi
+                    source "$ACTIVATE_SCRIPT"
+                    nohup node index.js > node.log 2>&1 &
+                    echo $! > node.pid
+                    print_success "Node.js应用已重启，PID: $(cat node.pid)"
                 else
                     cd "$domain_dir"
                     nohup node index.js > node.log 2>&1 &
                     echo $! > node.pid
                     print_success "Node.js应用已重启，PID: $(cat node.pid)"
                 fi
+            else
+                cd "$domain_dir"
+                nohup node index.js > node.log 2>&1 &
+                echo $! > node.pid
+                print_success "Node.js应用已重启，PID: $(cat node.pid)"
+            fi
 
-                print_success "服务和探针已重启完成！"
-                exit 0
-                ;;
-            3)
-                print_info "已取消操作，退出脚本。"
-                exit 0
-                ;;
-            *)
-                print_error "无效选项，继续执行安装流程..."
-                ;;
-        esac
-    fi
+            print_success "服务和探针已重启完成！"
+            exit 0
+            ;;
+        3)
+            print_info "已取消操作，退出脚本。"
+            exit 0
+            ;;
+        *)
+            print_error "无效选项，继续执行安装流程..."
+            ;;
+    esac
 fi
 
 # 询问端口号

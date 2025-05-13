@@ -2,6 +2,21 @@
 
 这是一个简化的WebSocket服务器部署工具，用于在共享主机环境中快速部署WebSocket服务和哪吒探针。
 
+## 目录
+
+- [特点](#特点)
+- [使用方法](#使用方法)
+- [功能选项](#功能选项)
+- [配置选项](#配置选项)
+- [创建Node.js应用](#创建nodejs应用)
+- [日志记录](#日志记录)
+- [订阅地址](#订阅地址)
+- [自动保活功能](#自动保活功能)
+- [常见问题](#常见问题)
+- [注意事项](#注意事项)
+- [贡献](#贡献)
+- [许可证](#许可证)
+
 ## 特点
 
 - 简单易用的交互式菜单界面
@@ -15,16 +30,10 @@
 
 ### 快速开始
 
-1. 下载脚本：
+一键下载并运行脚本：
 
 ```bash
-curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh -o setup.sh && chmod +x setup.sh
-```
-
-2. 运行脚本：
-
-```bash
-./setup.sh
+curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh -o setup.sh && chmod +x setup.sh && ./setup.sh
 ```
 
 ### 功能选项

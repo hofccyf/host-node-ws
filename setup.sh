@@ -5,7 +5,31 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# 脚本版本
+VERSION="1.1.0"
+
+# 获取运行统计
+get_run_stats() {
+    # 使用curl获取统计数据，超时设置为3秒
+    local stats_data=$(curl -s -m 3 "https://visit.okyes.filegear-sg.me/?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh" 2>/dev/null)
+
+    # 解析统计数据
+    if [ -n "$stats_data" ]; then
+        TODAY=$(echo "$stats_data" | grep -o '"daily_count":[0-9]*' | grep -o '[0-9]*')
+        TOTAL=$(echo "$stats_data" | grep -o '"total_count":[0-9]*' | grep -o '[0-9]*')
+
+        # 如果解析失败，设置默认值
+        TODAY=${TODAY:-0}
+        TOTAL=${TOTAL:-0}
+    else
+        # 如果获取失败，设置默认值
+        TODAY=0
+        TOTAL=0
+    fi
+}
 
 # 创建日志目录
 LOG_DIR="$HOME/tmp/ws_setup_logs"
@@ -558,8 +582,11 @@ force_reinstall() {
 show_menu() {
     clear
     echo "========================================"
-    echo "      WebSocket服务器部署工具 v1.0      "
+    echo "      WebSocket服务器部署工具 v$VERSION      "
     echo "========================================"
+    echo -e "${CYAN}今日运行: ${YELLOW}${TODAY}次   ${CYAN}累计运行: ${YELLOW}${TOTAL}次${NC}"
+    echo -e "----------By mqiancheng----------"
+    echo -e "项目地址: https://github.com/mqiancheng/host-node-ws"
     echo ""
 
     # 显示进程状态
@@ -611,11 +638,17 @@ show_menu() {
 
 # 主函数
 main() {
+    # 获取运行统计
+    get_run_stats
+
     # 显示欢迎信息
     clear
     echo "========================================"
-    echo "      WebSocket服务器部署工具 v1.0      "
+    echo "      WebSocket服务器部署工具 v$VERSION      "
     echo "========================================"
+    echo -e "${CYAN}今日运行: ${YELLOW}${TODAY}次   ${CYAN}累计运行: ${YELLOW}${TOTAL}次${NC}"
+    echo -e "----------By mqiancheng----------"
+    echo -e "项目地址: https://github.com/mqiancheng/host-node-ws"
     echo ""
     print_info "欢迎使用WebSocket服务器部署工具！"
     print_info "此工具可以帮助您快速部署WebSocket服务和哪吒探针。"

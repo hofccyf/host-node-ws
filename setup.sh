@@ -81,9 +81,10 @@ check_processes() {
 
     # 检查WebSocket服务进程
     if [ -n "$DOMAIN_DIR" ]; then
-        # 检查lsnode进程
-        LSNODE_PATTERN="lsnode:$DOMAIN_DIR"
-        LSNODE_PID=$(ps aux | grep "$LSNODE_PATTERN" | grep -v grep | awk '{print $2}')
+        # 检查lsnode进程 - 使用更宽松的匹配模式
+        DOMAIN_SHORT=$(basename "$DOMAIN_DIR")
+        LSNODE_PATTERN="lsnode:.*/domains/.*$DOMAIN_SHORT"
+        LSNODE_PID=$(ps aux | grep -E "$LSNODE_PATTERN" | grep -v grep | awk '{print $2}')
         if [ -n "$LSNODE_PID" ]; then
             NODE_RUNNING=true
             NODE_PID=$LSNODE_PID
@@ -730,9 +731,10 @@ check_and_start_all() {
         if [ -n "$DOMAIN" ] && [ -n "$DOMAIN_DIR" ]; then
             NODE_RUNNING=false
 
-            # 检查lsnode进程
-            LSNODE_PATTERN="lsnode:$DOMAIN_DIR"
-            LSNODE_PID=$(ps aux | grep "$LSNODE_PATTERN" | grep -v grep | awk '{print $2}')
+            # 检查lsnode进程 - 使用更宽松的匹配模式
+            DOMAIN_SHORT=$(basename "$DOMAIN_DIR")
+            LSNODE_PATTERN="lsnode:.*/domains/.*$DOMAIN_SHORT"
+            LSNODE_PID=$(ps aux | grep -E "$LSNODE_PATTERN" | grep -v grep | awk '{print $2}')
             if [ -n "$LSNODE_PID" ]; then
                 NODE_RUNNING=true
             else

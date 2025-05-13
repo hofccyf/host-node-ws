@@ -42,9 +42,12 @@ print_error() {
     echo "[ERROR] $(date +%H:%M:%S) $1" >> "$LOG_FILE"
 }
 
-# 记录调试信息到日志
+# 记录调试信息到日志（只在关键点记录）
 log_debug() {
-    echo "[DEBUG] $(date +%H:%M:%S) $1" >> "$LOG_FILE"
+    # 只记录重要的调试信息
+    if [[ "$1" == *"配置文件"* ]] || [[ "$1" == *"启动"* ]] || [[ "$1" == *"停止"* ]] || [[ "$1" == *"错误"* ]]; then
+        echo "[DEBUG] $(date +%H:%M:%S) $1" >> "$LOG_FILE"
+    fi
 }
 
 # 获取用户名
@@ -79,46 +82,17 @@ check_processes() {
     NODE_RUNNING=false
     NEZHA_RUNNING=false
 
-    # 检查WebSocket服务进程
-    if [ -n "$DOMAIN_DIR" ]; then
-        # 检查lsnode进程 - 使用更宽松的匹配模式
-        DOMAIN_SHORT=$(basename "$DOMAIN_DIR")
-        LSNODE_PATTERN="lsnode:.*/domains/.*$DOMAIN_SHORT"
-        LSNODE_PID=$(ps aux | grep -E "$LSNODE_PATTERN" | grep -v grep | awk '{print $2}')
-        if [ -n "$LSNODE_PID" ]; then
-            NODE_RUNNING=true
-            NODE_PID=$LSNODE_PID
-            NODE_TYPE="lsnode"
-            log_debug "检测到正在运行的lsnode进程，PID: $LSNODE_PID"
-        else
-            # 备用检查：检查node.pid文件
-            if [ -f "$DOMAIN_DIR/node.pid" ]; then
-                NODE_PID=$(cat "$DOMAIN_DIR/node.pid")
-                if ps -p $NODE_PID > /dev/null; then
-                    NODE_RUNNING=true
-                    NODE_TYPE="node.pid"
-                    log_debug "检测到正在运行的Node.js进程，PID: $NODE_PID"
-                else
-                    log_debug "node.pid文件存在但进程不存在，PID: $NODE_PID"
-                fi
-            fi
-
-            # 再次尝试检查node进程
-            NODE_PROCESS_PID=$(ps aux | grep "node $DOMAIN_DIR/index.js" | grep -v grep | awk '{print $2}')
-            if [ -n "$NODE_PROCESS_PID" ]; then
-                NODE_RUNNING=true
-                NODE_PID=$NODE_PROCESS_PID
-                NODE_TYPE="node"
-                log_debug "检测到正在运行的node进程，PID: $NODE_PROCESS_PID"
-            fi
-        fi
+    # 简化的WebSocket服务进程检测
+    if ps aux | grep "lsnode:" | grep -v grep > /dev/null; then
+        NODE_RUNNING=true
+        NODE_PID=$(ps aux | grep "lsnode:" | grep -v grep | awk '{print $2}')
+        NODE_TYPE="lsnode"
     fi
 
-    # 检查哪吒探针进程
-    NEZHA_PID=$(pgrep -u "$USER" -f "nezha-agent")
-    if [ -n "$NEZHA_PID" ]; then
+    # 简化的哪吒探针进程检测
+    if pgrep -u "$USER" -f "nezha-agent" > /dev/null; then
         NEZHA_RUNNING=true
-        log_debug "检测到正在运行的哪吒探针进程，PID: $NEZHA_PID"
+        NEZHA_PID=$(pgrep -u "$USER" -f "nezha-agent")
     fi
 }
 
@@ -163,7 +137,6 @@ modify_config() {
     domains_dir="/home/$username/domains"
     if [ ! -d "$domains_dir" ]; then
         print_error "未找到domains目录: $domains_dir"
-        log_debug "domains目录不存在: $domains_dir"
         return 1
     fi
 
@@ -174,16 +147,13 @@ modify_config() {
         if [ -d "$dir" ]; then
             domain_name=$(basename "$dir")
             domains+=("$domain_name")
-            log_debug "找到域名目录: $domain_name"
         fi
     done
 
     # 显示域名列表
     if [ ${#domains[@]} -eq 0 ]; then
         print_warning "未找到任何域名目录，请手动输入域名"
-        log_debug "未找到任何域名目录"
         read -p "请输入您的域名 (例如: example.com): " domain
-        log_debug "用户输入域名: $domain"
     else
         echo "检测到以下域名:"
         for i in "${!domains[@]}"; do
@@ -192,18 +162,14 @@ modify_config() {
 
         echo "[m] 手动输入其他域名"
         read -p "请选择域名 [0-$((${#domains[@]}-1))/m]: " domain_choice
-        log_debug "用户选择: $domain_choice"
 
         if [[ "$domain_choice" == "m" ]]; then
             read -p "请输入您的域名 (例如: example.com): " domain
-            log_debug "用户手动输入域名: $domain"
         elif [[ "$domain_choice" =~ ^[0-9]+$ ]] && [ "$domain_choice" -ge 0 ] && [ "$domain_choice" -lt ${#domains[@]} ]; then
             domain="${domains[$domain_choice]}"
             print_info "已选择域名: $domain"
-            log_debug "用户从列表选择域名: $domain"
         else
             print_error "无效选择！"
-            log_debug "用户输入了无效选择: $domain_choice"
             return 1
         fi
     fi
@@ -213,12 +179,10 @@ modify_config() {
     if [ ! -d "$domain_dir" ]; then
         print_error "域名目录 $domain_dir 不存在！"
         print_info "请检查您的域名是否正确，或者域名是否已经在控制面板中创建。"
-        log_debug "域名目录不存在: $domain_dir"
         return 1
     fi
 
     print_info "域名目录: $domain_dir"
-    log_debug "确认域名目录: $domain_dir"
 
     # 检查Node.js应用是否已创建
     NODE_ENV_PATH="/home/$username/nodevenv/domains/$domain/public_html"
@@ -231,17 +195,14 @@ modify_config() {
     # 询问节点名称
     read -p "请输入节点名称 (默认: hostvps): " node_name
     node_name=${node_name:-"hostvps"}
-    log_debug "用户设置节点名称: $node_name"
 
     # 询问端口号
     read -p "请输入监听端口 (默认: 3000): " port
     port=${port:-3000}
-    log_debug "用户设置端口: $port"
 
     # UUID处理
     read -p "是否自动生成UUID? (Y/n, 默认: Y): " auto_uuid
     auto_uuid=${auto_uuid:-"Y"}
-    log_debug "用户选择UUID生成方式: $auto_uuid"
 
     if [[ $auto_uuid =~ ^[Yy]$ ]]; then
         # 生成UUID
@@ -252,34 +213,27 @@ modify_config() {
             uuid=$(cat /proc/sys/kernel/random/uuid)
         fi
         print_info "自动生成的UUID: $uuid"
-        log_debug "自动生成UUID: $uuid"
     else
         read -p "请输入UUID: " uuid
         if [ -z "$uuid" ]; then
             print_error "UUID不能为空！"
-            log_debug "用户未提供UUID，退出脚本"
             return 1
         fi
-        log_debug "用户输入UUID: $uuid"
     fi
 
     # 询问哪吒探针信息（可选）
     read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555，可选): " nezha_server
-    log_debug "用户输入哪吒服务器地址: $nezha_server"
 
     if [ -n "$nezha_server" ]; then
         read -p "请输入哪吒客户端密钥 (可选): " nezha_key
-        log_debug "用户输入哪吒客户端密钥"
 
         # 询问是否使用TLS
         read -p "是否使用TLS连接哪吒服务器? (Y/n, 默认: Y): " use_tls
         use_tls=${use_tls:-"Y"}
         if [[ $use_tls =~ ^[Yy]$ ]]; then
             nezha_tls=true
-            log_debug "用户选择使用TLS连接"
         else
             nezha_tls=false
-            log_debug "用户选择不使用TLS连接"
         fi
     else
         nezha_key=""
@@ -419,7 +373,6 @@ httpServer.listen(PORT, () => {
     console.log(\`Server is running on port \${PORT}\`);
 });
 EOF
-    log_debug "已创建index.js文件"
 
     # 创建package.json
     print_info "创建package.json文件..."
@@ -444,14 +397,13 @@ EOF
   }
 }
 EOF
-    log_debug "已创建package.json文件"
 
     # 停止现有进程
     check_processes
     if [ "$NODE_RUNNING" = true ]; then
         print_info "停止现有WebSocket服务进程..."
         kill $NODE_PID
-        log_debug "已停止WebSocket服务进程，PID: $NODE_PID"
+        log_debug "已停止WebSocket服务进程"
     fi
 
     # 获取Node.js虚拟环境激活脚本
@@ -460,7 +412,6 @@ EOF
         SELECTED_VERSION="${NODE_VERSIONS[0]}"
         NODE_ENV_ACTIVATE="$NODE_ENV_PATH/$SELECTED_VERSION/bin/activate"
         print_info "使用Node.js版本: $SELECTED_VERSION"
-        log_debug "选择的Node.js版本: $SELECTED_VERSION, 激活脚本: $NODE_ENV_ACTIVATE"
 
         # 安装依赖并启动服务
         print_info "安装依赖并启动服务..."
@@ -472,10 +423,9 @@ EOF
         nohup node index.js > node.log 2>&1 &
         echo $! > node.pid
         print_success "WebSocket服务已启动，PID: $(cat node.pid)"
-        log_debug "已启动WebSocket服务，PID: $(cat node.pid)"
+        log_debug "已启动WebSocket服务"
     else
         print_error "未找到Node.js版本，请确保已正确创建Node.js应用"
-        log_debug "未找到Node.js版本"
         return 1
     fi
 
@@ -498,7 +448,7 @@ start_nezha() {
     # 检查哪吒探针配置
     if [ -z "$NEZHA_SERVER" ] || [ -z "$NEZHA_KEY" ]; then
         print_warning "哪吒探针配置不完整，请先修改配置文件"
-        log_debug "哪吒探针配置不完整: NEZHA_SERVER=$NEZHA_SERVER, NEZHA_KEY=$NEZHA_KEY"
+        log_debug "哪吒探针配置不完整"
         return 1
     fi
 
@@ -507,22 +457,11 @@ start_nezha() {
     if [ "$NEZHA_RUNNING" = true ]; then
         print_info "停止现有哪吒探针进程..."
         kill $NEZHA_PID
-        log_debug "已停止哪吒探针进程，PID: $NEZHA_PID"
+        log_debug "已停止哪吒探针进程"
     fi
 
-    # 下载agent.sh（如果不存在）
-    if [ ! -f "$HOME/agent.sh" ]; then
-        print_info "下载哪吒探针安装脚本..."
-        cd "$HOME"
-        curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/refs/heads/main/agent.sh -o agent.sh && chmod +x agent.sh
-        log_debug "成功下载agent.sh并设置执行权限"
-    fi
-
-    # 启动哪吒探针
-    print_info "启动哪吒探针..."
-    cd "$HOME"
-    env NZ_SERVER="$NEZHA_SERVER" NZ_TLS=$NEZHA_TLS NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
-    log_debug "已启动哪吒探针"
+    # 下载并启动哪吒探针
+    start_nezha_process
 
     # 等待探针启动
     sleep 2
@@ -536,6 +475,23 @@ start_nezha() {
     return 0
 }
 
+# 下载并启动哪吒探针进程（供多个函数调用）
+start_nezha_process() {
+    # 下载agent.sh（如果不存在）
+    if [ ! -f "$HOME/agent.sh" ]; then
+        print_info "下载哪吒探针安装脚本..."
+        cd "$HOME"
+        curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/refs/heads/main/agent.sh -o agent.sh && chmod +x agent.sh
+        log_debug "成功下载agent.sh"
+    fi
+
+    # 启动哪吒探针
+    print_info "启动哪吒探针..."
+    cd "$HOME"
+    env NZ_SERVER="$NEZHA_SERVER" NZ_TLS=$NEZHA_TLS NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
+    log_debug "已启动哪吒探针"
+}
+
 # 强制重新安装
 force_reinstall() {
     print_info "准备强制重新安装..."
@@ -543,11 +499,9 @@ force_reinstall() {
 
     read -p "此操作将删除所有现有文件和进程，确定继续? (y/N, 默认: N): " confirm_reinstall
     confirm_reinstall=${confirm_reinstall:-"N"}
-    log_debug "用户确认重新安装: $confirm_reinstall"
 
     if [[ ! $confirm_reinstall =~ ^[Yy]$ ]]; then
         print_info "已取消重新安装。"
-        log_debug "用户取消重新安装"
         return 1
     fi
 
@@ -559,19 +513,18 @@ force_reinstall() {
     # 停止并清理现有安装
     print_info "正在清理现有安装..."
 
-    # 停止WebSocket服务进程
+    # 停止所有进程
     check_processes
     if [ "$NODE_RUNNING" = true ]; then
         print_info "停止WebSocket服务进程..."
         kill $NODE_PID
-        log_debug "已停止WebSocket服务进程，PID: $NODE_PID"
+        log_debug "已停止WebSocket服务进程"
     fi
 
-    # 停止哪吒探针
     if [ "$NEZHA_RUNNING" = true ]; then
         print_info "停止哪吒探针进程..."
         kill $NEZHA_PID
-        log_debug "已停止哪吒探针进程，PID: $NEZHA_PID"
+        log_debug "已停止哪吒探针进程"
     fi
 
     # 卸载哪吒探针
@@ -579,54 +532,23 @@ force_reinstall() {
         cd "$HOME"
         ./agent.sh uninstall
         print_info "已卸载哪吒探针"
-        log_debug "执行agent.sh uninstall卸载哪吒探针"
     fi
 
     # 删除文件
     print_info "删除现有文件..."
-    log_debug "开始删除文件"
 
+    # 删除域名目录下的文件
     if [ -n "$DOMAIN_DIR" ] && [ -d "$DOMAIN_DIR" ]; then
-        if [ -f "$DOMAIN_DIR/index.js" ]; then
-            rm "$DOMAIN_DIR/index.js"
-            log_debug "已删除 index.js"
-        fi
-
-        if [ -f "$DOMAIN_DIR/package.json" ]; then
-            rm "$DOMAIN_DIR/package.json"
-            log_debug "已删除 package.json"
-        fi
-
-        if [ -f "$DOMAIN_DIR/node.pid" ]; then
-            rm "$DOMAIN_DIR/node.pid"
-            log_debug "已删除 node.pid"
-        fi
-
-        if [ -f "$DOMAIN_DIR/node.log" ]; then
-            rm "$DOMAIN_DIR/node.log"
-            log_debug "已删除 node.log"
-        fi
+        rm -f "$DOMAIN_DIR/index.js" "$DOMAIN_DIR/package.json" "$DOMAIN_DIR/node.pid" "$DOMAIN_DIR/node.log"
     fi
 
-    if [ -f "$HOME/agent.sh" ]; then
-        rm "$HOME/agent.sh"
-        log_debug "已删除 agent.sh"
-    fi
-
-    if [ -f "$CONFIG_FILE" ]; then
-        rm "$CONFIG_FILE"
-        log_debug "已删除配置文件 $CONFIG_FILE"
-    fi
-
-    if [ -d "$HOME/nezha" ]; then
-        rm -rf "$HOME/nezha"
-        log_debug "已删除 nezha 目录"
-    fi
+    # 删除其他文件和目录
+    rm -f "$HOME/agent.sh" "$CONFIG_FILE"
+    rm -rf "$HOME/nezha"
 
     # 清理日志文件夹
     rm -rf "$LOG_DIR"
     mkdir -p "$LOG_DIR"
-    log_debug "已清理日志文件夹 $LOG_DIR"
 
     print_success "清理完成！"
     return 0
@@ -713,44 +635,18 @@ check_and_start_all() {
         source "$CONFIG_FILE"
 
         # 检查并启动哪吒探针
-        NEZHA_PID=$(pgrep -u "$USER" -f "nezha-agent")
-        if [ -z "$NEZHA_PID" ] && [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_KEY" ]; then
-            # 下载agent.sh（如果不存在）
-            if [ ! -f "$HOME/agent.sh" ]; then
-                cd "$HOME"
-                curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/refs/heads/main/agent.sh -o agent.sh && chmod +x agent.sh
-            fi
-
-            # 启动哪吒探针
-            cd "$HOME"
-            env NZ_SERVER="$NEZHA_SERVER" NZ_TLS=$NEZHA_TLS NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
+        if ! pgrep -u "$USER" -f "nezha-agent" > /dev/null && [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_KEY" ]; then
+            # 使用通用函数启动哪吒探针
+            start_nezha_process
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] 哪吒探针已启动" >> "$LOG_DIR/cron_autorestart.log"
         fi
 
         # 检查并启动WebSocket服务
         if [ -n "$DOMAIN" ] && [ -n "$DOMAIN_DIR" ]; then
+            # 使用简化的进程检测
             NODE_RUNNING=false
-
-            # 检查lsnode进程 - 使用更宽松的匹配模式
-            DOMAIN_SHORT=$(basename "$DOMAIN_DIR")
-            LSNODE_PATTERN="lsnode:.*/domains/.*$DOMAIN_SHORT"
-            LSNODE_PID=$(ps aux | grep -E "$LSNODE_PATTERN" | grep -v grep | awk '{print $2}')
-            if [ -n "$LSNODE_PID" ]; then
+            if ps aux | grep "lsnode:" | grep -v grep > /dev/null; then
                 NODE_RUNNING=true
-            else
-                # 备用检查：检查node.pid文件
-                if [ -f "$DOMAIN_DIR/node.pid" ]; then
-                    NODE_PID=$(cat "$DOMAIN_DIR/node.pid")
-                    if ps -p $NODE_PID > /dev/null; then
-                        NODE_RUNNING=true
-                    fi
-                fi
-
-                # 再次尝试检查node进程
-                NODE_PROCESS_PID=$(ps aux | grep "node $DOMAIN_DIR/index.js" | grep -v grep | awk '{print $2}')
-                if [ -n "$NODE_PROCESS_PID" ]; then
-                    NODE_RUNNING=true
-                fi
             fi
 
             # 如果WebSocket服务未运行，尝试通过curl访问订阅地址来启动它

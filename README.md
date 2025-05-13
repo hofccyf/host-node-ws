@@ -24,6 +24,9 @@
 - 引导用户创建Node.js应用
 - 自动安装和配置WebSocket服务
 - 可选安装和配置哪吒探针
+- 支持自定义反代域名
+- 显示VLESS订阅地址
+- 运行统计功能
 - 详细的日志记录
 
 ## 使用方法
@@ -70,6 +73,7 @@ curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh 
 - **节点名称**：显示在订阅信息中的节点名称（默认：hostvps）
 - **监听端口**：WebSocket服务器监听的端口（默认：3000）
 - **UUID**：可以自动生成或手动输入，用于WebSocket连接验证
+- **反代域名**：用于VLESS连接的反代域名（默认：www.visa.com.tw）
 - **哪吒服务器地址**：哪吒探针服务器地址（可选）
 - **哪吒客户端密钥**：哪吒探针的客户端密钥（可选）
 - **TLS连接**：是否使用TLS连接哪吒服务器（默认：是）
@@ -93,13 +97,17 @@ curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh 
 
 ## 订阅地址
 
-WebSocket服务启动后，您可以通过以下地址获取VLESS订阅：
+WebSocket服务启动后，脚本会自动显示您的VLESS订阅地址：
 
 ```
-https://您的域名/sub
+您的VLESS订阅地址是：https://您的域名/sub
 ```
 
 例如：`https://example.com/sub`
+
+这个URL会返回一个Base64编码的VLESS链接，可以直接导入到支持VLESS协议的客户端中。
+
+VLESS链接使用您配置的反代域名作为服务器地址，使用您的实际域名作为SNI和Host参数，这样可以提高连接成功率。
 
 ## 常见问题
 

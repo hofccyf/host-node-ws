@@ -9,7 +9,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 脚本版本
-VERSION="1.1.0"
+VERSION="1.2.0"
 
 # 获取运行统计
 get_run_stats() {
@@ -245,6 +245,10 @@ modify_config() {
         fi
     fi
 
+    # 询问反代域名（可选）
+    read -p "请输入反代域名 (如果没有可回车默认使用www.visa.com.tw): " cf_domain
+    cf_domain=${cf_domain:-"www.visa.com.tw"}
+
     # 询问哪吒探针信息（可选）
     read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555，可选): " nezha_server
 
@@ -272,6 +276,7 @@ DOMAIN_DIR="$domain_dir"
 NODE_NAME="$node_name"
 PORT="$port"
 UUID="$uuid"
+CF_DOMAIN="$cf_domain"
 
 # 哪吒探针配置
 NEZHA_SERVER="$nezha_server"
@@ -318,6 +323,7 @@ const { WebSocket, createWebSocketStream } = require('ws');
 // 配置参数
 const UUID = process.env.UUID || '$UUID';    // UUID用于验证连接
 const DOMAIN = process.env.DOMAIN || '$DOMAIN';    // 域名
+const CF_DOMAIN = process.env.CF_DOMAIN || '$CF_DOMAIN';    // 反代域名
 const SUB_PATH = process.env.SUB_PATH || 'sub';     // 获取节点的订阅路径
 const NAME = process.env.NAME || '$NODE_NAME';  // 节点名称
 const PORT = process.env.PORT || $PORT;     // http和ws服务端口
@@ -335,7 +341,7 @@ const httpServer = http.createServer((req, res) => {
         console.log(\`UUID: \${UUID}, DOMAIN: \${DOMAIN}, NAME: \${NAME}\`);
 
         const nodeName = NAME || 'NodeWS';
-        const vlessURL = \`vless://\${UUID}@www.visa.com.tw:443?encryption=none&security=tls&sni=\${DOMAIN}&type=ws&host=\${DOMAIN}&path=%2F#\${nodeName}\`;
+        const vlessURL = \`vless://\${UUID}@\${CF_DOMAIN}:443?encryption=none&security=tls&sni=\${DOMAIN}&type=ws&host=\${DOMAIN}&path=%2F#\${nodeName}\`;
 
         console.log(\`生成的VLESS URL: \${vlessURL}\`);
         const base64Content = Buffer.from(vlessURL).toString('base64');
@@ -406,8 +412,8 @@ EOF
   "version": "1.0.0",
   "description": "WebSocket Server",
   "main": "index.js",
-  "author": "eoovve",
-  "repository": "https://github.com/eoovve/node-ws",
+  "author": "mqiancheng",
+  "repository": "https://github.com/mqiancheng/host-node-ws",
   "license": "MIT",
   "private": false,
   "scripts": {
@@ -447,6 +453,7 @@ EOF
         nohup node index.js > node.log 2>&1 &
         echo $! > node.pid
         print_success "WebSocket服务已启动，PID: $(cat node.pid)"
+        echo -e "${GREEN}您的VLESS订阅地址是：${NC}https://${DOMAIN}/sub"
         log_debug "已启动WebSocket服务"
     else
         print_error "未找到Node.js版本，请确保已正确创建Node.js应用"

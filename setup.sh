@@ -35,10 +35,23 @@ get_run_stats() {
 LOG_DIR="$HOME/tmp/ws_setup_logs"
 mkdir -p "$LOG_DIR"
 
-# 创建日志文件
-LOG_FILE="$LOG_DIR/ws_setup_$(date +%Y%m%d%H%M%S).log"
-touch "$LOG_FILE"
-echo "=== 安装日志开始 $(date) ===" > "$LOG_FILE"
+# 清理旧日志文件（超过7天的）
+find "$LOG_DIR" -type f -name "ws_setup_*.log" -mtime +7 -delete 2>/dev/null
+
+# 设置日志文件
+if [ "$1" = "check_and_start_all" ]; then
+    # cron任务执行，使用固定的日志文件
+    LOG_FILE="$LOG_DIR/cron_autorestart.log"
+    # 如果日志文件超过1MB，则清空它
+    if [ -f "$LOG_FILE" ] && [ $(stat -c%s "$LOG_FILE" 2>/dev/null || stat -f%z "$LOG_FILE" 2>/dev/null) -gt 1048576 ]; then
+        echo "=== 日志文件已重置 $(date) ===" > "$LOG_FILE"
+    fi
+else
+    # 手动执行，创建带时间戳的日志文件
+    LOG_FILE="$LOG_DIR/ws_setup_$(date +%Y%m%d%H%M%S).log"
+    touch "$LOG_FILE"
+    echo "=== 安装日志开始 $(date) ===" > "$LOG_FILE"
+fi
 
 # 创建配置目录和文件
 CONFIG_DIR="$HOME/tmp/ws_config"
@@ -77,13 +90,11 @@ log_debug() {
 # 获取用户名
 username=$(whoami)
 print_info "检测到用户名: $username"
-log_debug "用户名: $username"
 
 # 检查配置文件是否存在
 check_config() {
     if [ ! -f "$CONFIG_FILE" ]; then
         print_warning "未找到配置文件，请先执行'修改配置文件'选项"
-        log_debug "配置文件不存在: $CONFIG_FILE"
         return 1
     fi
     return 0
@@ -93,10 +104,8 @@ check_config() {
 load_config() {
     if [ -f "$CONFIG_FILE" ]; then
         source "$CONFIG_FILE"
-        log_debug "已加载配置文件: $CONFIG_FILE"
         return 0
     else
-        log_debug "配置文件不存在，无法加载: $CONFIG_FILE"
         return 1
     fi
 }
@@ -149,13 +158,11 @@ guide_nodejs_creation() {
     echo "6. 点击\"创建\"按钮"
     echo ""
     print_info "创建完成后，请重新运行此脚本"
-    log_debug "引导用户创建Node.js应用: $1"
 }
 
 # 修改配置文件
 modify_config() {
     print_info "修改配置文件..."
-    log_debug "用户选择: 修改配置文件"
 
     # 检查domains目录
     domains_dir="/home/$username/domains"
@@ -284,8 +291,6 @@ NEZHA_KEY="$nezha_key"
 NEZHA_TLS="$nezha_tls"
 EOF
     chmod 600 "$CONFIG_FILE"
-    log_debug "已保存配置到 $CONFIG_FILE"
-
     print_success "配置文件已保存！"
     return 0
 }
@@ -293,7 +298,6 @@ EOF
 # 启动WebSocket代理服务
 start_websocket() {
     print_info "启动WebSocket代理服务..."
-    log_debug "用户选择: 启动WebSocket代理服务"
 
     # 检查配置文件
     if ! check_config; then
@@ -433,7 +437,6 @@ EOF
     if [ "$NODE_RUNNING" = true ]; then
         print_info "停止现有WebSocket服务进程..."
         kill $NODE_PID
-        log_debug "已停止WebSocket服务进程"
     fi
 
     # 获取Node.js虚拟环境激活脚本
@@ -454,7 +457,6 @@ EOF
         echo $! > node.pid
         print_success "WebSocket服务已启动，PID: $(cat node.pid)"
         echo -e "${GREEN}您的VLESS订阅地址是：${NC}https://${DOMAIN}/sub"
-        log_debug "已启动WebSocket服务"
     else
         print_error "未找到Node.js版本，请确保已正确创建Node.js应用"
         return 1
@@ -466,7 +468,6 @@ EOF
 # 启动哪吒探针
 start_nezha() {
     print_info "启动哪吒探针..."
-    log_debug "用户选择: 启动哪吒探针"
 
     # 检查配置文件
     if ! check_config; then
@@ -479,7 +480,6 @@ start_nezha() {
     # 检查哪吒探针配置
     if [ -z "$NEZHA_SERVER" ] || [ -z "$NEZHA_KEY" ]; then
         print_warning "哪吒探针配置不完整，请先修改配置文件"
-        log_debug "哪吒探针配置不完整"
         return 1
     fi
 
@@ -488,7 +488,6 @@ start_nezha() {
     if [ "$NEZHA_RUNNING" = true ]; then
         print_info "停止现有哪吒探针进程..."
         kill $NEZHA_PID
-        log_debug "已停止哪吒探针进程"
     fi
 
     # 下载并启动哪吒探针
@@ -513,20 +512,17 @@ start_nezha_process() {
         print_info "下载哪吒探针安装脚本..."
         cd "$HOME"
         curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/refs/heads/main/agent.sh -o agent.sh && chmod +x agent.sh
-        log_debug "成功下载agent.sh"
     fi
 
     # 启动哪吒探针
     print_info "启动哪吒探针..."
     cd "$HOME"
     env NZ_SERVER="$NEZHA_SERVER" NZ_TLS=$NEZHA_TLS NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
-    log_debug "已启动哪吒探针"
 }
 
 # 强制重新安装
 force_reinstall() {
     print_info "准备强制重新安装..."
-    log_debug "用户选择: 强制重新安装"
 
     read -p "此操作将删除所有现有文件和进程，确定继续? (y/N, 默认: N): " confirm_reinstall
     confirm_reinstall=${confirm_reinstall:-"N"}
@@ -549,13 +545,11 @@ force_reinstall() {
     if [ "$NODE_RUNNING" = true ]; then
         print_info "停止WebSocket服务进程..."
         kill $NODE_PID
-        log_debug "已停止WebSocket服务进程"
     fi
 
     if [ "$NEZHA_RUNNING" = true ]; then
         print_info "停止哪吒探针进程..."
         kill $NEZHA_PID
-        log_debug "已停止哪吒探针进程"
     fi
 
     # 卸载哪吒探针
@@ -678,25 +672,22 @@ check_and_start_all() {
         if ! pgrep -u "$USER" -f "nezha-agent" > /dev/null && [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_KEY" ]; then
             # 使用通用函数启动哪吒探针
             start_nezha_process
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 哪吒探针已启动" >> "$LOG_DIR/cron_autorestart.log"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 哪吒探针已启动" >> "$LOG_FILE"
         fi
 
         # 检查并启动WebSocket服务
         if [ -n "$DOMAIN" ] && [ -n "$DOMAIN_DIR" ]; then
-            # 使用简化的进程检测
-            NODE_RUNNING=false
-            if ps aux | grep "lsnode:" | grep -v grep > /dev/null; then
-                NODE_RUNNING=true
-            fi
+            # 使用check_processes函数检测进程状态
+            check_processes
 
             # 如果WebSocket服务未运行，尝试通过curl访问订阅地址来启动它
             if [ "$NODE_RUNNING" = false ]; then
                 curl -s -o /dev/null "https://$DOMAIN/sub"
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试通过访问订阅地址启动WebSocket服务" >> "$LOG_DIR/cron_autorestart.log"
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试通过访问订阅地址启动WebSocket服务" >> "$LOG_FILE"
             fi
         fi
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 配置文件不存在，无法启动服务" >> "$LOG_DIR/cron_autorestart.log"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 配置文件不存在，无法启动服务" >> "$LOG_FILE"
     fi
 }
 

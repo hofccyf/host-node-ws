@@ -124,17 +124,30 @@ init() {
 install() {
     echo "Installing..."
 
-    if [ -z "$CN" ]; then
-        NZ_AGENT_URL="https://${GITHUB_URL}/nezhahq/agent/releases/latest/download/nezha-agent_${os}_${os_arch}.zip"
-    else
-        _version=$(curl -m 10 -sL "https://gitee.com/api/v5/repos/naibahq/agent/releases/latest" | awk -F '"' '{for(i=1;i<=NF;i++){if($i=="tag_name"){print $(i+2)}}}')
-        NZ_AGENT_URL="https://${GITHUB_URL}/naibahq/agent/releases/download/${_version}/nezha-agent_${os}_${os_arch}.zip"
-    fi
+    # 检查是否已经下载了文件
+    LOCAL_FILE="$HOME/nezha-agent_${os}_${os_arch}.zip"
 
-    _cmd="wget -T 60 -O /tmp/nezha-agent_${os}_${os_arch}.zip $NZ_AGENT_URL >/dev/null 2>&1"
-    if ! eval "$_cmd"; then
-        err "Download nezha-agent release failed, check your network connectivity"
-        exit 1
+    if [ -f "$LOCAL_FILE" ]; then
+        echo "Using existing local file: $LOCAL_FILE"
+        cp "$LOCAL_FILE" /tmp/nezha-agent_${os}_${os_arch}.zip
+    else
+        # 使用固定的GitHub URL，避免重定向问题
+        NZ_AGENT_URL="https://github.com/nezhahq/agent/releases/download/v1.12.2/nezha-agent_${os}_${os_arch}.zip"
+
+        echo "Downloading from: $NZ_AGENT_URL"
+
+        # 直接使用wget命令，不使用eval，并显示下载进度
+        if ! wget -T 60 -O /tmp/nezha-agent_${os}_${os_arch}.zip "$NZ_AGENT_URL"; then
+            # 如果下载失败，检查当前目录是否有下载好的文件
+            if [ -f "nezha-agent_linux_amd64.zip" ] && [ "$os" = "linux" ] && [ "$os_arch" = "amd64" ]; then
+                echo "Using existing file in current directory: nezha-agent_linux_amd64.zip"
+                cp "nezha-agent_linux_amd64.zip" /tmp/nezha-agent_${os}_${os_arch}.zip
+            else
+                err "Download nezha-agent release failed, check your network connectivity"
+                err "Please download the file manually and place it in the current directory"
+                exit 1
+            fi
+        fi
     fi
 
     mkdir -p $NZ_AGENT_PATH

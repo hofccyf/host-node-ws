@@ -401,6 +401,29 @@ deploy_argo_service() {
         return 1
     fi
 
+    # 直接修改argows.js中的配置值
+    print_info "修改argows.js配置值..."
+
+    # 转义特殊字符，避免sed命令出错
+    ARGO_AUTH_ESCAPED=$(echo "$ARGO_AUTH" | sed 's/[\/&]/\\&/g')
+
+    # 修改配置值
+    sed -i "s/const UUID = process.env.UUID || '';/const UUID = process.env.UUID || '$UUID';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const DOMAIN = process.env.DOMAIN || '';/const DOMAIN = process.env.DOMAIN || '$DOMAIN';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const CF_DOMAIN = process.env.CF_DOMAIN || 'www.visa.com.tw';/const CF_DOMAIN = process.env.CF_DOMAIN || '$CF_DOMAIN';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const NAME = process.env.NAME || 'argo-ws';/const NAME = process.env.NAME || '$NODE_NAME';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const PORT = process.env.SERVER_PORT || process.env.PORT || 3001;/const PORT = process.env.SERVER_PORT || process.env.PORT || $PORT;/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const NEZHA_SERVER = process.env.NEZHA_SERVER || '';/const NEZHA_SERVER = process.env.NEZHA_SERVER || '$NEZHA_SERVER';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const NEZHA_PORT = process.env.NEZHA_PORT || '';/const NEZHA_PORT = process.env.NEZHA_PORT || '$NEZHA_PORT';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const NEZHA_KEY = process.env.NEZHA_KEY || '';/const NEZHA_KEY = process.env.NEZHA_KEY || '$NEZHA_KEY';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const ARGO_DOMAIN = process.env.ARGO_DOMAIN || '';/const ARGO_DOMAIN = process.env.ARGO_DOMAIN || '$ARGO_DOMAIN';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const ARGO_AUTH = process.env.ARGO_AUTH || '';/const ARGO_AUTH = process.env.ARGO_AUTH || '$ARGO_AUTH_ESCAPED';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const ARGO_PORT = process.env.ARGO_PORT || 8001;/const ARGO_PORT = process.env.ARGO_PORT || $ARGO_PORT;/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const AUTO_ACCESS = process.env.AUTO_ACCESS === 'false' ? false : true;/const AUTO_ACCESS = process.env.AUTO_ACCESS === 'false' ? false : $AUTO_ACCESS;/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s|const PROJECT_URL = process.env.PROJECT_URL || '';|const PROJECT_URL = process.env.PROJECT_URL || '$PROJECT_URL';|g" "$DOMAIN_DIR/argows.js"
+
+    print_success "argows.js配置值已修改！"
+
     # 创建package.json
     print_info "创建package.json文件..."
     cat > "$DOMAIN_DIR/package.json" << EOF
@@ -450,11 +473,11 @@ EOF
         source "$NODE_ENV_ACTIVATE"
         npm install
 
-        # 设置环境变量并启动服务
+        # 启动服务
         print_info "启动Argo代理服务..."
 
-        # 调试: 输出配置文件中的变量值
-        echo "===== 调试信息: 配置文件中的变量值 =====" > debug.log
+        # 记录配置信息到日志
+        echo "===== 配置信息 =====" > debug.log
         echo "UUID=$UUID" >> debug.log
         echo "DOMAIN=$DOMAIN" >> debug.log
         echo "CF_DOMAIN=$CF_DOMAIN" >> debug.log
@@ -468,64 +491,9 @@ EOF
         echo "ARGO_PORT=$ARGO_PORT" >> debug.log
         echo "AUTO_ACCESS=$AUTO_ACCESS" >> debug.log
         echo "PROJECT_URL=$PROJECT_URL" >> debug.log
-        echo "===== 调试信息结束 =====" >> debug.log
+        echo "===== 配置信息结束 =====" >> debug.log
 
-        # 导出环境变量
-        export UUID="$UUID"
-        export DOMAIN="$DOMAIN"
-        export CF_DOMAIN="$CF_DOMAIN"
-        export NAME="$NODE_NAME"
-        export PORT="$PORT"
-        export NEZHA_SERVER="$NEZHA_SERVER"
-        export NEZHA_PORT="$NEZHA_PORT"
-        export NEZHA_KEY="$NEZHA_KEY"
-        export ARGO_DOMAIN="$ARGO_DOMAIN"
-        export ARGO_AUTH="$ARGO_AUTH"
-        export ARGO_PORT="$ARGO_PORT"
-        export AUTO_ACCESS="$AUTO_ACCESS"
-        export PROJECT_URL="$PROJECT_URL"
-
-        # 调试: 验证环境变量是否正确设置
-        echo "===== 调试信息: 环境变量验证 =====" >> debug.log
-        echo "env UUID=$(env | grep UUID)" >> debug.log
-        echo "env DOMAIN=$(env | grep DOMAIN)" >> debug.log
-        echo "env CF_DOMAIN=$(env | grep CF_DOMAIN)" >> debug.log
-        echo "env NAME=$(env | grep NAME)" >> debug.log
-        echo "env PORT=$(env | grep PORT)" >> debug.log
-        echo "env NEZHA_SERVER=$(env | grep NEZHA_SERVER)" >> debug.log
-        echo "env NEZHA_PORT=$(env | grep NEZHA_PORT)" >> debug.log
-        echo "env NEZHA_KEY=$(env | grep NEZHA_KEY)" >> debug.log
-        echo "env ARGO_DOMAIN=$(env | grep ARGO_DOMAIN)" >> debug.log
-        echo "env ARGO_AUTH=$(env | grep ARGO_AUTH)" >> debug.log
-        echo "env ARGO_PORT=$(env | grep ARGO_PORT)" >> debug.log
-        echo "env AUTO_ACCESS=$(env | grep AUTO_ACCESS)" >> debug.log
-        echo "env PROJECT_URL=$(env | grep PROJECT_URL)" >> debug.log
-        echo "===== 环境变量验证结束 =====" >> debug.log
-
-        # 创建一个临时脚本来验证环境变量传递
-        cat > "$DOMAIN_DIR/env_test.js" << EOF
-console.log("===== Node.js环境变量测试 =====");
-console.log("UUID:", process.env.UUID);
-console.log("DOMAIN:", process.env.DOMAIN);
-console.log("CF_DOMAIN:", process.env.CF_DOMAIN);
-console.log("NAME:", process.env.NAME);
-console.log("PORT:", process.env.PORT);
-console.log("NEZHA_SERVER:", process.env.NEZHA_SERVER);
-console.log("NEZHA_PORT:", process.env.NEZHA_PORT);
-console.log("NEZHA_KEY:", process.env.NEZHA_KEY);
-console.log("ARGO_DOMAIN:", process.env.ARGO_DOMAIN);
-console.log("ARGO_AUTH:", process.env.ARGO_AUTH);
-console.log("ARGO_PORT:", process.env.ARGO_PORT);
-console.log("AUTO_ACCESS:", process.env.AUTO_ACCESS);
-console.log("PROJECT_URL:", process.env.PROJECT_URL);
-console.log("===== 测试结束 =====");
-EOF
-
-        # 运行测试脚本
-        print_info "测试环境变量传递..."
-        node "$DOMAIN_DIR/env_test.js" >> debug.log 2>&1
-
-        # 启动Node.js应用
+        # 启动Node.js应用（不依赖环境变量，因为配置已经写入文件）
         print_info "启动Node.js应用..."
         nohup node argows.js > argo.log 2>&1 &
         echo $! > argo.pid
@@ -723,9 +691,29 @@ check_and_start_all() {
             # 检查Xray和Argo进程
             check_processes
 
-            # 如果Xray或Argo未运行，尝试通过curl访问订阅地址来启动它
+            # 如果Xray或Argo未运行，尝试启动Node.js应用
             if [ "$XRAY_RUNNING" = false ] || [ "$ARGO_RUNNING" = false ]; then
-                # 如果有固定隧道域名，使用它访问
+                # 检查Node.js环境
+                NODE_ENV_PATH="/home/$username/nodevenv/domains/$DOMAIN/public_html"
+                if [ -d "$NODE_ENV_PATH" ]; then
+                    NODE_VERSIONS=( $(ls -d "$NODE_ENV_PATH"/* 2>/dev/null | grep -o '[0-9]*$' | sort -nr) )
+                    if [ ${#NODE_VERSIONS[@]} -gt 0 ]; then
+                        SELECTED_VERSION="${NODE_VERSIONS[0]}"
+                        NODE_ENV_ACTIVATE="$NODE_ENV_PATH/$SELECTED_VERSION/bin/activate"
+
+                        # 激活Node.js环境并启动服务
+                        cd "$DOMAIN_DIR"
+                        source "$NODE_ENV_ACTIVATE"
+
+                        # 直接启动Node.js应用（不依赖环境变量，因为配置已经写入文件）
+                        nohup node argows.js > argo.log 2>&1 &
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试直接启动Node.js应用" >> "$LOG_FILE"
+                    fi
+                else
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 未找到Node.js环境，无法启动服务" >> "$LOG_FILE"
+                fi
+
+                # 尝试通过访问订阅地址来启动服务（作为备用方法）
                 if [ -n "$ARGO_DOMAIN" ]; then
                     curl -s -o /dev/null "https://$ARGO_DOMAIN/sub"
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试通过访问固定隧道订阅地址启动服务" >> "$LOG_FILE"

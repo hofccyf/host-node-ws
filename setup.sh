@@ -48,53 +48,164 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# 检查脚本是否存在
-check_scripts() {
-    local missing_scripts=()
+# 获取脚本的版本号
+get_script_version() {
+    local script_file=$1
+    if [ -f "$script_file" ]; then
+        local version=$(grep -o 'VERSION="[0-9.]*"' "$script_file" | grep -o '[0-9.]*')
+        echo "$version"
+    else
+        echo "0.0.0"
+    fi
+}
 
-    if [ ! -f "setup-ws.sh" ]; then
-        missing_scripts+=("setup-ws.sh")
+# 获取GitHub上脚本的最新版本号
+get_github_version() {
+    local script_file=$1
+    local github_content=$(curl -s "https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/$script_file")
+    if [ -n "$github_content" ]; then
+        local version=$(echo "$github_content" | grep -o 'VERSION="[0-9.]*"' | grep -o '[0-9.]*')
+        echo "$version"
+    else
+        echo "0.0.0"
+    fi
+}
+
+# 比较版本号，如果版本2大于版本1，返回1，否则返回0
+compare_versions() {
+    local version1=$1
+    local version2=$2
+
+    if [ "$version1" = "$version2" ]; then
+        return 0
     fi
 
-    if [ ! -f "setup-argo.sh" ]; then
-        missing_scripts+=("setup-argo.sh")
+    local IFS=.
+    local i ver1=($version1) ver2=($version2)
+
+    # 填充短版本号
+    for ((i=${#ver1[@]}; i<${#ver2[@]}; i++)); do
+        ver1[i]=0
+    done
+    for ((i=${#ver2[@]}; i<${#ver1[@]}; i++)); do
+        ver2[i]=0
+    done
+
+    # 比较版本号
+    for ((i=0; i<${#ver1[@]}; i++)); do
+        if [[ -z ${ver2[i]} ]]; then
+            # 如果ver2短，则ver1大
+            return 0
+        fi
+        if ((10#${ver1[i]} > 10#${ver2[i]})); then
+            return 0
+        fi
+        if ((10#${ver1[i]} < 10#${ver2[i]})); then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+# 下载脚本
+download_script() {
+    local script_file=$1
+    print_info "下载 $script_file..."
+    curl -L "https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/$script_file" -o "$script_file"
+    if [ $? -eq 0 ]; then
+        chmod +x "$script_file"
+        print_success "成功下载 $script_file"
+        return 0
+    else
+        print_error "下载 $script_file 失败"
+        return 1
     fi
+}
 
-    if [ ${#missing_scripts[@]} -gt 0 ]; then
-        print_error "缺少以下脚本文件:"
-        for script in "${missing_scripts[@]}"; do
-            echo "- $script"
-        done
+# 下载指定的脚本
+download_specific_script() {
+    local script_name=$1
 
-        print_info "正在尝试下载缺失的脚本..."
-
-        for script in "${missing_scripts[@]}"; do
-            if [ "$script" = "setup-ws.sh" ]; then
-                curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup-ws.sh -o setup-ws.sh
-                if [ $? -eq 0 ]; then
-                    chmod +x setup-ws.sh
-                    print_success "成功下载 setup-ws.sh"
-                else
-                    print_error "下载 setup-ws.sh 失败"
-                    return 1
-                fi
-            elif [ "$script" = "setup-argo.sh" ]; then
-                curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup-argo.sh -o setup-argo.sh
-                if [ $? -eq 0 ]; then
-                    chmod +x setup-argo.sh
-                    print_success "成功下载 setup-argo.sh"
-                else
-                    print_error "下载 setup-argo.sh 失败"
-                    return 1
-                fi
-            fi
-        done
+    if [ ! -f "$script_name" ]; then
+        print_info "正在下载 $script_name..."
+        download_script "$script_name" || return 1
     fi
 
     # 确保脚本有执行权限
-    chmod +x setup-ws.sh setup-argo.sh
+    chmod +x "$script_name"
 
     return 0
+}
+
+# 检查脚本更新
+check_script_updates() {
+    local has_updates=false
+    local update_list=""
+
+    # 检查setup-ws.sh
+    if [ -f "setup-ws.sh" ]; then
+        local local_version=$(get_script_version "setup-ws.sh")
+        local github_version=$(get_github_version "setup-ws.sh")
+
+        compare_versions "$local_version" "$github_version"
+        if [ $? -eq 1 ]; then
+            has_updates=true
+            update_list="$update_list\n- setup-ws.sh: $local_version -> $github_version"
+        fi
+    fi
+
+    # 检查setup-argo.sh
+    if [ -f "setup-argo.sh" ]; then
+        local local_version=$(get_script_version "setup-argo.sh")
+        local github_version=$(get_github_version "setup-argo.sh")
+
+        compare_versions "$local_version" "$github_version"
+        if [ $? -eq 1 ]; then
+            has_updates=true
+            update_list="$update_list\n- setup-argo.sh: $local_version -> $github_version"
+        fi
+    fi
+
+    # 检查setup.sh自身
+    local self_local_version="$VERSION"
+    local self_github_version=$(get_github_version "setup.sh")
+
+    compare_versions "$self_local_version" "$self_github_version"
+    if [ $? -eq 1 ]; then
+        has_updates=true
+        update_list="$update_list\n- setup.sh: $self_local_version -> $self_github_version"
+    fi
+
+    # 显示更新信息
+    if [ "$has_updates" = true ]; then
+        print_info "发现以下脚本有更新:"
+        echo -e "$update_list"
+
+        read -p "是否更新这些脚本? (Y/n): " update_choice
+        update_choice=${update_choice:-Y}
+
+        if [[ $update_choice =~ ^[Yy]$ ]]; then
+            # 更新脚本
+            if [ -f "setup-ws.sh" ]; then
+                download_script "setup-ws.sh"
+            fi
+
+            if [ -f "setup-argo.sh" ]; then
+                download_script "setup-argo.sh"
+            fi
+
+            # 更新setup.sh自身
+            download_script "setup.sh"
+
+            print_success "脚本更新完成，请重新运行setup.sh"
+            exit 0
+        else
+            print_info "跳过脚本更新"
+        fi
+    else
+        print_success "所有脚本已是最新版本"
+    fi
 }
 
 # 统计用户选择
@@ -118,12 +229,6 @@ main() {
     echo -e "项目地址: https://github.com/mqiancheng/host-node-ws"
     echo ""
 
-    # 检查脚本文件
-    if ! check_scripts; then
-        print_error "无法继续，请手动下载所需脚本文件"
-        exit 1
-    fi
-
     # 显示选择菜单
     echo "请选择要部署的服务类型："
     echo "1. 基础WebSocket代理服务"
@@ -132,26 +237,57 @@ main() {
     echo ""
     echo -e "${YELLOW}注意: Argo隧道WebSocket代理服务正在测试中，暂时不可用${NC}"
     echo ""
+    echo "2. 检查脚本更新"
+    echo "   - 检查并更新已下载的脚本"
+    echo ""
 
     read -p "请输入选项 [1]: " choice
+    choice=${choice:-1}
 
     case $choice in
         1)
             # 统计用户选择了WebSocket版本
             record_choice "ws"
-            print_info "正在启动WebSocket部署工具..."
-            sleep 1
-            exec ./setup-ws.sh
+            print_info "正在准备WebSocket部署工具..."
+
+            # 下载所需脚本
+            if download_specific_script "setup-ws.sh"; then
+                print_info "正在启动WebSocket部署工具..."
+                sleep 1
+                exec ./setup-ws.sh
+            else
+                print_error "无法下载所需脚本，请检查网络连接或手动下载"
+                exit 1
+            fi
             ;;
         2)
-            # 用户尝试选择Argo版本
-            print_warning "Argo隧道WebSocket代理服务正在测试中，暂时不可用"
-            print_info "请选择基础WebSocket代理服务或稍后再试"
-            sleep 2
-            exec $0  # 重新运行当前脚本
+            # 统计用户选择了检查更新
+            record_choice "update"
+            print_info "正在检查脚本更新..."
+            check_script_updates
+
+            # 更新完成后，重新显示主菜单
+            read -p "按Enter键返回主菜单..." dummy
+            exec $0
+            ;;
+        # 隐藏的Argo选项，暂时不可用
+        9)
+            # 统计用户选择了Argo版本
+            record_choice "argo"
+            print_info "正在准备Argo隧道WebSocket部署工具..."
+
+            # 下载所需脚本
+            if download_specific_script "setup-argo.sh"; then
+                print_info "正在启动Argo隧道WebSocket部署工具..."
+                sleep 1
+                exec ./setup-argo.sh
+            else
+                print_error "无法下载所需脚本，请检查网络连接或手动下载"
+                exit 1
+            fi
             ;;
         *)
-            print_error "无效选项，请重新运行脚本并选择1"
+            print_error "无效选项，请重新运行脚本并选择1-2之间的数字"
             exit 1
             ;;
     esac

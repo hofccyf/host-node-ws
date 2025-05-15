@@ -407,20 +407,33 @@ deploy_argo_service() {
     # 转义特殊字符，避免sed命令出错
     ARGO_AUTH_ESCAPED=$(echo "$ARGO_AUTH" | sed 's/[\/&]/\\&/g')
 
-    # 修改配置值
-    sed -i "s/const UUID = process.env.UUID || '';/const UUID = process.env.UUID || '$UUID';/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const DOMAIN = process.env.DOMAIN || '';/const DOMAIN = process.env.DOMAIN || '$DOMAIN';/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const CF_DOMAIN = process.env.CF_DOMAIN || 'www.visa.com.tw';/const CF_DOMAIN = process.env.CF_DOMAIN || '$CF_DOMAIN';/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const NAME = process.env.NAME || 'argo-ws';/const NAME = process.env.NAME || '$NODE_NAME';/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const PORT = process.env.SERVER_PORT || process.env.PORT || 3001;/const PORT = process.env.SERVER_PORT || process.env.PORT || $PORT;/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const NEZHA_SERVER = process.env.NEZHA_SERVER || '';/const NEZHA_SERVER = process.env.NEZHA_SERVER || '$NEZHA_SERVER';/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const NEZHA_PORT = process.env.NEZHA_PORT || '';/const NEZHA_PORT = process.env.NEZHA_PORT || '$NEZHA_PORT';/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const NEZHA_KEY = process.env.NEZHA_KEY || '';/const NEZHA_KEY = process.env.NEZHA_KEY || '$NEZHA_KEY';/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const ARGO_DOMAIN = process.env.ARGO_DOMAIN || '';/const ARGO_DOMAIN = process.env.ARGO_DOMAIN || '$ARGO_DOMAIN';/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const ARGO_AUTH = process.env.ARGO_AUTH || '';/const ARGO_AUTH = process.env.ARGO_AUTH || '$ARGO_AUTH_ESCAPED';/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const ARGO_PORT = process.env.ARGO_PORT || 8001;/const ARGO_PORT = process.env.ARGO_PORT || $ARGO_PORT;/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s/const AUTO_ACCESS = process.env.AUTO_ACCESS === 'false' ? false : true;/const AUTO_ACCESS = process.env.AUTO_ACCESS === 'false' ? false : $AUTO_ACCESS;/g" "$DOMAIN_DIR/argows.js"
-    sed -i "s|const PROJECT_URL = process.env.PROJECT_URL || '';|const PROJECT_URL = process.env.PROJECT_URL || '$PROJECT_URL';|g" "$DOMAIN_DIR/argows.js"
+    # 修改配置值 - 直接替换变量值，不再依赖环境变量
+    sed -i "s/const UUID = '';/const UUID = '$UUID';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const DOMAIN = '';/const DOMAIN = '$DOMAIN';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const CF_DOMAIN = 'www.visa.com.tw';/const CF_DOMAIN = '$CF_DOMAIN';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const NAME = 'argo-ws';/const NAME = '$NODE_NAME';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const PORT = 3001;/const PORT = $PORT;/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const NEZHA_SERVER = '';/const NEZHA_SERVER = '$NEZHA_SERVER';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const NEZHA_PORT = '';/const NEZHA_PORT = '$NEZHA_PORT';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const NEZHA_KEY = '';/const NEZHA_KEY = '$NEZHA_KEY';/g" "$DOMAIN_DIR/argows.js"
+    sed -i "s/const ARGO_DOMAIN = '';/const ARGO_DOMAIN = '$ARGO_DOMAIN';/g" "$DOMAIN_DIR/argows.js"
+
+    # 转义ARGO_AUTH中的特殊字符
+    ARGO_AUTH_ESCAPED=$(echo "$ARGO_AUTH" | sed 's/[\/&]/\\&/g')
+    sed -i "s/const ARGO_AUTH = '';/const ARGO_AUTH = '$ARGO_AUTH_ESCAPED';/g" "$DOMAIN_DIR/argows.js"
+
+    sed -i "s/const ARGO_PORT = 8001;/const ARGO_PORT = $ARGO_PORT;/g" "$DOMAIN_DIR/argows.js"
+
+    # 修改AUTO_ACCESS变量
+    if [[ "$AUTO_ACCESS" == "true" ]]; then
+        sed -i "s/const AUTO_ACCESS = true;/const AUTO_ACCESS = true;/g" "$DOMAIN_DIR/argows.js"
+    else
+        sed -i "s/const AUTO_ACCESS = true;/const AUTO_ACCESS = false;/g" "$DOMAIN_DIR/argows.js"
+    fi
+
+    # 修改PROJECT_URL变量
+    PROJECT_URL_ESCAPED=$(echo "$PROJECT_URL" | sed 's/[\/&]/\\&/g')
+    sed -i "s|const PROJECT_URL = '';|const PROJECT_URL = '$PROJECT_URL_ESCAPED';|g" "$DOMAIN_DIR/argows.js"
 
     print_success "argows.js配置值已修改！"
 

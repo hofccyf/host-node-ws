@@ -7,42 +7,25 @@ const path = require("path");
 const { promisify } = require('util');
 const exec = promisify(require('child_process').exec);
 
-// 调试: 输出环境变量
-console.log("===== argows.js 环境变量调试 =====");
-console.log("UUID:", process.env.UUID);
-console.log("DOMAIN:", process.env.DOMAIN);
-console.log("CF_DOMAIN:", process.env.CF_DOMAIN);
-console.log("NAME:", process.env.NAME);
-console.log("PORT:", process.env.PORT);
-console.log("NEZHA_SERVER:", process.env.NEZHA_SERVER);
-console.log("NEZHA_PORT:", process.env.NEZHA_PORT);
-console.log("NEZHA_KEY:", process.env.NEZHA_KEY);
-console.log("ARGO_DOMAIN:", process.env.ARGO_DOMAIN);
-console.log("ARGO_AUTH:", process.env.ARGO_AUTH);
-console.log("ARGO_PORT:", process.env.ARGO_PORT);
-console.log("AUTO_ACCESS:", process.env.AUTO_ACCESS);
-console.log("PROJECT_URL:", process.env.PROJECT_URL);
-console.log("===== 环境变量调试结束 =====");
-
 // --- 配置参数 ---
-const UPLOAD_URL = process.env.UPLOAD_URL || '';      // 节点或订阅自动上传地址,没有则不填
-const PROJECT_URL = process.env.PROJECT_URL || '';    // 填写项目分配的url
-const AUTO_ACCESS = process.env.AUTO_ACCESS === 'false' ? false : true; // false关闭自动保活，true开启
-const FILE_PATH = process.env.FILE_PATH || './tmp';   // 运行目录,sub节点文件保存目录
-const SUB_PATH = process.env.SUB_PATH || 'sub';       // 订阅路径
-// 尝试使用不同的端口，避免冲突
-const PORT = process.env.SERVER_PORT || process.env.PORT || 3001;        // http服务订阅端口
+// 这些值将由setup-argo.sh脚本自动修改，无需手动编辑
+const UPLOAD_URL = '';      // 节点或订阅自动上传地址,没有则不填
+const PROJECT_URL = '';    // 填写项目分配的url
+const AUTO_ACCESS = true; // false关闭自动保活，true开启
+const FILE_PATH = './tmp';   // 运行目录,sub节点文件保存目录
+const SUB_PATH = 'sub';       // 订阅路径
+const PORT = 3001;        // http服务订阅端口
 console.log("使用端口:", PORT);
-const UUID = process.env.UUID || ''; // 使用哪吒v1,在不同的平台运行需修改UUID
-const NEZHA_SERVER = process.env.NEZHA_SERVER || '';        // 哪吒v1填写形式: nz.abc.com:8008  哪吒v0填写形式：nz.abc.com
-const NEZHA_PORT = process.env.NEZHA_PORT || '';            // 使用哪吒v1请留空，哪吒v0需填写
-const NEZHA_KEY = process.env.NEZHA_KEY || '';              // 哪吒v1的NZ_CLIENT_SECRET或哪吒v0的agent密钥
-const ARGO_DOMAIN = process.env.ARGO_DOMAIN || '';          // 固定隧道域名,留空即启用临时隧道
-const ARGO_AUTH = process.env.ARGO_AUTH || '';              // 固定隧道密钥json或token
-const ARGO_PORT = process.env.ARGO_PORT || 8001;            // 固定隧道端口
-const CFIP = process.env.CFIP || 'www.visa.com.tw';         // 节点优选域名或优选ip
-const CFPORT = process.env.CFPORT || 443;                   // 节点优选域名或优选ip对应的端口
-const NAME = process.env.NAME || 'argo-ws';                     // 节点名称                 // 节点名称
+const UUID = ''; // 使用哪吒v1,在不同的平台运行需修改UUID
+const NEZHA_SERVER = '';        // 哪吒v1填写形式: nz.abc.com:8008  哪吒v0填写形式：nz.abc.com
+const NEZHA_PORT = '';            // 使用哪吒v1请留空，哪吒v0需填写
+const NEZHA_KEY = '';              // 哪吒v1的NZ_CLIENT_SECRET或哪吒v0的agent密钥
+const ARGO_DOMAIN = '';          // 固定隧道域名,留空即启用临时隧道
+const ARGO_AUTH = '';              // 固定隧道密钥json或token
+const ARGO_PORT = 8001;            // 固定隧道端口
+const CFIP = 'www.visa.com.tw';         // 节点优选域名或优选ip
+const CFPORT = 443;                   // 节点优选域名或优选ip对应的端口
+const NAME = 'argo-ws';                     // 节点名称
 
 // --- 文件路径 ---
 let npmPath = path.join(FILE_PATH, 'npm');

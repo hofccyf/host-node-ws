@@ -130,13 +130,10 @@ main() {
     echo "   - 简单易用，适合基本代理需求"
     echo "   - 直接使用域名提供WebSocket服务"
     echo ""
-    echo "2. Argo隧道WebSocket代理服务"
-    echo "   - 提供Cloudflare Argo隧道功能"
-    echo "   - 支持临时隧道和固定隧道"
-    echo "   - 提供多协议支持(VLESS/VMess/Trojan)"
+    echo -e "${YELLOW}注意: Argo隧道WebSocket代理服务正在测试中，暂时不可用${NC}"
     echo ""
 
-    read -p "请输入选项 [1-2]: " choice
+    read -p "请输入选项 [1]: " choice
 
     case $choice in
         1)
@@ -147,14 +144,14 @@ main() {
             exec ./setup-ws.sh
             ;;
         2)
-            # 统计用户选择了Argo版本
-            record_choice "argo"
-            print_info "正在启动Argo隧道部署工具..."
-            sleep 1
-            exec ./setup-argo.sh
+            # 用户尝试选择Argo版本
+            print_warning "Argo隧道WebSocket代理服务正在测试中，暂时不可用"
+            print_info "请选择基础WebSocket代理服务或稍后再试"
+            sleep 2
+            exec $0  # 重新运行当前脚本
             ;;
         *)
-            print_error "无效选项，请重新运行脚本并选择1或2"
+            print_error "无效选项，请重新运行脚本并选择1"
             exit 1
             ;;
     esac

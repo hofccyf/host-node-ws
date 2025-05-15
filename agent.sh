@@ -124,29 +124,25 @@ init() {
 install() {
     echo "Installing..."
 
-    # 检查是否已经下载了文件
-    LOCAL_FILE="$HOME/nezha-agent_${os}_${os_arch}.zip"
-
-    if [ -f "$LOCAL_FILE" ]; then
-        echo "Using existing local file: $LOCAL_FILE"
-        cp "$LOCAL_FILE" /tmp/nezha-agent_${os}_${os_arch}.zip
-    else
-        # 使用固定的GitHub URL，避免重定向问题
+    # 使用固定版本的URL，避免重定向问题
+    if [ -z "$CN" ]; then
         NZ_AGENT_URL="https://github.com/nezhahq/agent/releases/download/v1.12.2/nezha-agent_${os}_${os_arch}.zip"
+    else
+        NZ_AGENT_URL="https://gitee.com/naibahq/agent/releases/download/v1.12.2/nezha-agent_${os}_${os_arch}.zip"
+    fi
 
-        echo "Downloading from: $NZ_AGENT_URL"
+    echo "Downloading from: $NZ_AGENT_URL"
 
-        # 直接使用wget命令，不使用eval，并显示下载进度
-        if ! wget -T 60 -O /tmp/nezha-agent_${os}_${os_arch}.zip "$NZ_AGENT_URL"; then
-            # 如果下载失败，检查当前目录是否有下载好的文件
-            if [ -f "nezha-agent_linux_amd64.zip" ] && [ "$os" = "linux" ] && [ "$os_arch" = "amd64" ]; then
-                echo "Using existing file in current directory: nezha-agent_linux_amd64.zip"
-                cp "nezha-agent_linux_amd64.zip" /tmp/nezha-agent_${os}_${os_arch}.zip
-            else
-                err "Download nezha-agent release failed, check your network connectivity"
-                err "Please download the file manually and place it in the current directory"
-                exit 1
-            fi
+    # 尝试下载
+    _cmd="wget -T 60 -O /tmp/nezha-agent_${os}_${os_arch}.zip $NZ_AGENT_URL"
+    if ! eval "$_cmd"; then
+        # 如果下载失败，检查当前目录是否有下载好的文件
+        if [ -f "nezha-agent_linux_amd64.zip" ] && [ "$os" = "linux" ] && [ "$os_arch" = "amd64" ]; then
+            echo "Using existing file in current directory: nezha-agent_linux_amd64.zip"
+            cp "nezha-agent_linux_amd64.zip" /tmp/nezha-agent_${os}_${os_arch}.zip
+        else
+            err "Download nezha-agent release failed, check your network connectivity"
+            exit 1
         fi
     fi
 

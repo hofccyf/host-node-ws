@@ -589,7 +589,7 @@ force_reinstall() {
 show_menu() {
     clear
     echo "========================================"
-    echo "      WebSocket服务器部署工具 v$VERSION      "
+    echo "      基础WebSocket代理服务 v$VERSION      "
     echo "========================================"
     echo -e "${CYAN}今日运行: ${YELLOW}${TODAY}次   ${CYAN}累计运行: ${YELLOW}${TOTAL}次${NC}"
     echo -e "----------By mqiancheng----------"
@@ -604,14 +604,19 @@ show_menu() {
     echo "1. 修改配置文件"
     echo "2. 启动WebSocket代理服务"
     echo "3. 启动哪吒探针"
-    echo "4. 退出脚本"
     echo "5. 强制重新安装（清除现有安装）"
+    echo "0. 退出脚本"
     echo ""
 
-    read -p "请输入选项 [1-5]: " option
+    read -p "请输入选项 [0-5]: " option
     log_debug "用户选择操作: $option"
 
     case $option in
+        0)
+            print_info "退出脚本。"
+            log_debug "用户选择退出脚本"
+            exit 0
+            ;;
         1)
             modify_config
             ;;
@@ -620,11 +625,6 @@ show_menu() {
             ;;
         3)
             start_nezha
-            ;;
-        4)
-            print_info "退出脚本。"
-            log_debug "用户选择退出脚本"
-            exit 0
             ;;
         5)
             force_reinstall

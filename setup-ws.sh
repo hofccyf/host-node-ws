@@ -9,7 +9,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 脚本版本
-VERSION="1.2.0"
+VERSION="1.2.1"
 
 # 获取运行统计
 get_run_stats() {
@@ -120,7 +120,7 @@ check_processes() {
         NODE_RUNNING=true
         NODE_PID=$(ps aux | grep "lsnode:" | grep -v grep | awk '{print $2}')
         NODE_TYPE="lsnode"
-        
+
     # 检测通用node index.js进程
     elif ps aux | grep "node index.js" | grep -v grep > /dev/null; then
         NODE_RUNNING=true

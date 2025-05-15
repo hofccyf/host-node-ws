@@ -16,6 +16,7 @@ HAS_UPDATES=false
 UPDATE_LIST=""
 WS_UPDATE_INFO=""
 ARGO_UPDATE_INFO=""
+SETUP_UPDATE_INFO=""
 
 # 获取运行统计
 get_run_stats() {
@@ -166,7 +167,14 @@ check_script_updates() {
                 download_script "setup-argo.sh"
             fi
 
-            print_success "脚本更新完成"
+            # 更新setup.sh自身
+            if [ -n "$SETUP_UPDATE_INFO" ]; then
+                download_script "setup.sh"
+                print_success "脚本更新完成，请重新运行setup.sh"
+                exit 0
+            else
+                print_success "脚本更新完成"
+            fi
         else
             print_info "跳过脚本更新"
         fi
@@ -211,6 +219,17 @@ check_update_status() {
             ARGO_UPDATE_INFO="setup-argo.sh: $local_version -> $github_version"
             update_list="$update_list\n- $ARGO_UPDATE_INFO"
         fi
+    fi
+
+    # 检查setup.sh自身
+    local self_local_version="$VERSION"
+    local self_github_version=$(get_github_version "setup.sh")
+
+    compare_versions "$self_local_version" "$self_github_version"
+    if [ $? -eq 1 ]; then
+        has_updates=true
+        SETUP_UPDATE_INFO="setup.sh: $self_local_version -> $self_github_version"
+        update_list="$update_list\n- $SETUP_UPDATE_INFO"
     fi
 
     # 设置全局更新状态

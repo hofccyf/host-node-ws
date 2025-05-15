@@ -9,7 +9,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 脚本版本
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # 全局变量
 HAS_UPDATES=false
@@ -247,18 +247,22 @@ main() {
     echo "请选择要部署的服务类型："
     echo "1. 基础WebSocket代理服务"
     echo "   - 简单易用，适合基本代理需求"
-    echo "   - 直接使用域名提供WebSocket服务"
+    echo "   - 仅支持哪吒V1面板"
+    echo "   - 仅支持VLESS协议"
     echo ""
-    echo -e "${YELLOW}注意: Argo隧道WebSocket代理服务正在测试中，暂时不可用${NC}"
+    echo "2. Argo隧道WebSocket代理服务"
+    echo "   - 使用Cloudflare Argo隧道"
+    echo "   - 支持临时隧道和固定隧道"
+    echo "   - 支持VLESS/VMess/Trojan协议"
     echo ""
 
-    # 根据是否有更新显示不同的选项2
+    # 根据是否有更新显示不同的选项3
     if [ "$HAS_UPDATES" = true ]; then
-        echo -e "2. ${GREEN}检查脚本更新 [有可用更新!]${NC}"
+        echo -e "3. ${GREEN}检查脚本更新 [有可用更新!]${NC}"
         echo "   - 发现以下脚本有更新:"
         echo -e "$UPDATE_LIST"
     else
-        echo "2. 检查脚本更新"
+        echo "3. 检查脚本更新"
         echo "   - 检查并更新已下载的脚本"
     fi
     echo ""
@@ -290,17 +294,6 @@ main() {
             fi
             ;;
         2)
-            # 统计用户选择了检查更新
-            record_choice "update"
-            print_info "正在检查脚本更新..."
-            check_script_updates
-
-            # 更新完成后，重新显示主菜单
-            read -p "按Enter键返回主菜单..." dummy
-            exec $0
-            ;;
-        # 隐藏的Argo选项，暂时不可用
-        9)
             # 统计用户选择了Argo版本
             record_choice "argo"
             print_info "正在准备Argo隧道WebSocket部署工具..."
@@ -315,8 +308,18 @@ main() {
                 exit 1
             fi
             ;;
+        3)
+            # 统计用户选择了检查更新
+            record_choice "update"
+            print_info "正在检查脚本更新..."
+            check_script_updates
+
+            # 更新完成后，重新显示主菜单
+            read -p "按Enter键返回主菜单..." dummy
+            exec $0
+            ;;
         *)
-            print_error "无效选项，请选择0-2之间的数字"
+            print_error "无效选项，请选择0-3之间的数字"
             exit 1
             ;;
     esac

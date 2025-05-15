@@ -9,7 +9,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 脚本版本
-VERSION="1.3.1"
+VERSION="1.3.2"
 
 # 获取运行统计
 get_run_stats() {

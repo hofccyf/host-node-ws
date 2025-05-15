@@ -266,13 +266,9 @@ main() {
     echo "请选择要部署的服务类型："
     echo "1. 基础WebSocket代理服务"
     echo "   - 简单易用，适合基本代理需求"
-    echo "   - 仅支持哪吒V1面板"
     echo "   - 仅支持VLESS协议"
     echo ""
-    echo "2. Argo隧道WebSocket代理服务"
-    echo "   - 使用Cloudflare Argo隧道"
-    echo "   - 支持临时隧道和固定隧道"
-    echo "   - 支持VLESS/VMess/Trojan协议"
+    echo -e "${YELLOW}注意: Argo隧道WebSocket代理服务正在测试中，暂时不可用${NC}"
     echo ""
 
     # 根据是否有更新显示不同的选项3
@@ -282,7 +278,6 @@ main() {
         echo -e "$UPDATE_LIST"
     else
         echo "3. 检查脚本更新"
-        echo "   - 检查并更新已下载的脚本"
     fi
     echo ""
     echo "0. 退出脚本"
@@ -312,7 +307,8 @@ main() {
                 exit 1
             fi
             ;;
-        2)
+        # 隐藏的Argo选项，暂时不可用
+        9)
             # 统计用户选择了Argo版本
             record_choice "argo"
             print_info "正在准备Argo隧道WebSocket部署工具..."
@@ -338,7 +334,7 @@ main() {
             exec $0
             ;;
         *)
-            print_error "无效选项，请选择0-3之间的数字"
+            print_error "无效选项，请选择0-1或3之间的数字"
             exit 1
             ;;
     esac

@@ -9,7 +9,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 脚本版本
-VERSION="1.2.1"
+VERSION="1.3.0"
 
 # 获取运行统计
 get_run_stats() {
@@ -262,22 +262,91 @@ modify_config() {
     read -p "请输入反代域名 (如果没有可回车默认使用www.visa.com.tw): " cf_domain
     cf_domain=${cf_domain:-"www.visa.com.tw"}
 
+    # 询问代理协议
+    echo "请选择代理协议:"
+    echo "1. VLESS (默认)"
+    echo "2. VMess"
+    echo "3. Trojan"
+    echo "4. 订阅全部节点"
+    read -p "请选择 [1-4]: " protocol_choice
+    protocol_choice=${protocol_choice:-1}
+
+    case $protocol_choice in
+        1)
+            protocol="vless"
+            protocol_name="VLESS"
+            ;;
+        2)
+            protocol="vmess"
+            protocol_name="VMess"
+            ;;
+        3)
+            protocol="trojan"
+            protocol_name="Trojan"
+            ;;
+        4)
+            protocol="all"
+            protocol_name="ALL"
+            ;;
+        *)
+            print_warning "无效选择，使用默认协议VLESS"
+            protocol="vless"
+            protocol_name="VLESS"
+            ;;
+    esac
+
+    print_info "已选择协议: $protocol_name"
+
     # 询问哪吒探针信息（可选）
-    read -p "请输入哪吒服务器地址 (例如: nz.example.com:5555，可选): " nezha_server
+    read -p "请输入哪吒服务器地址 (v1格式: nz.example.com:端口号；v0格式: nz.example.com，回车跳过配置哪吒探针): " nezha_server
 
     if [ -n "$nezha_server" ]; then
-        read -p "请输入哪吒客户端密钥 (可选): " nezha_key
+        read -p "请输入哪吒客户端密钥 (必填): " nezha_key
 
-        # 询问是否使用TLS
-        read -p "是否使用TLS连接哪吒服务器? (Y/n, 默认: Y): " use_tls
-        use_tls=${use_tls:-"Y"}
-        if [[ $use_tls =~ ^[Yy]$ ]]; then
-            nezha_tls=true
+        # 自动检测哪吒版本（通过检查服务器地址是否包含端口号）
+        if [[ "$nezha_server" == *":"* ]]; then
+            # 包含冒号，使用哪吒v1
+            print_info "检测到哪吒v1格式的服务器地址"
+            nezha_port=""
+
+            # 检查是否需要TLS
+            NEZHA_TLS="false"
+            if [[ "$nezha_server" == *":443"* ]] || [[ "$nezha_server" == *":8443"* ]] || [[ "$nezha_server" == *":2096"* ]] || [[ "$nezha_server" == *":2087"* ]] || [[ "$nezha_server" == *":2083"* ]] || [[ "$nezha_server" == *":2053"* ]]; then
+                print_info "检测到TLS端口，将使用TLS连接"
+                nezha_tls=true
+            else
+                # 询问是否使用TLS
+                read -p "是否使用TLS连接哪吒服务器? (Y/n, 默认: Y): " use_tls
+                use_tls=${use_tls:-"Y"}
+                if [[ $use_tls =~ ^[Yy]$ ]]; then
+                    nezha_tls=true
+                else
+                    nezha_tls=false
+                fi
+            fi
         else
-            nezha_tls=false
+            # 不包含冒号，使用哪吒v0
+            print_info "检测到哪吒v0格式的服务器地址"
+            read -p "请输入哪吒v0端口: " nezha_port
+
+            # 检查是否需要TLS
+            if [[ "$nezha_port" == "443" ]] || [[ "$nezha_port" == "8443" ]] || [[ "$nezha_port" == "2096" ]] || [[ "$nezha_port" == "2087" ]] || [[ "$nezha_port" == "2083" ]] || [[ "$nezha_port" == "2053" ]]; then
+                print_info "检测到TLS端口，将使用TLS连接"
+                nezha_tls="--tls"
+            else
+                # 询问是否使用TLS
+                read -p "是否使用TLS连接哪吒服务器? (Y/n, 默认: N): " use_tls
+                use_tls=${use_tls:-"N"}
+                if [[ $use_tls =~ ^[Yy]$ ]]; then
+                    nezha_tls="--tls"
+                else
+                    nezha_tls=""
+                fi
+            fi
         fi
     else
         nezha_key=""
+        nezha_port=""
         nezha_tls=true
     fi
 
@@ -290,10 +359,13 @@ NODE_NAME="$node_name"
 PORT="$port"
 UUID="$uuid"
 CF_DOMAIN="$cf_domain"
+PROTOCOL="$protocol"
+PROTOCOL_NAME="$protocol_name"
 
 # 哪吒探针配置
 NEZHA_SERVER="$nezha_server"
 NEZHA_KEY="$nezha_key"
+NEZHA_PORT="$nezha_port"
 NEZHA_TLS="$nezha_tls"
 EOF
     chmod 600 "$CONFIG_FILE"
@@ -351,11 +423,58 @@ const httpServer = http.createServer((req, res) => {
         console.log(\`UUID: \${UUID}, DOMAIN: \${DOMAIN}, NAME: \${NAME}\`);
 
         const nodeName = NAME || 'NodeWS';
-        const vlessURL = \`vless://\${UUID}@\${CF_DOMAIN}:443?encryption=none&security=tls&sni=\${DOMAIN}&type=ws&host=\${DOMAIN}&path=%2F#\${nodeName}\`;
+        let protocol = process.env.PROTOCOL || '$PROTOCOL' || 'vless';
+        let protocolName = process.env.PROTOCOL_NAME || '$PROTOCOL_NAME' || 'VLESS';
+        let base64Content = '';
 
-        console.log(\`生成的VLESS URL: \${vlessURL}\`);
-        const base64Content = Buffer.from(vlessURL).toString('base64');
-        console.log(\`Base64编码后: \${base64Content}\`);
+        // 生成VLESS URL
+        const vlessURL = \`vless://\${UUID}@\${CF_DOMAIN}:443?encryption=none&security=tls&sni=\${DOMAIN}&type=ws&host=\${DOMAIN}&path=%2F#\${nodeName}-VLESS\`;
+
+        // 生成VMess URL
+        const vmessConfig = {
+            v: '2',
+            ps: \`\${nodeName}-VMess\`,
+            add: CF_DOMAIN,
+            port: '443',
+            id: UUID,
+            aid: '0',
+            net: 'ws',
+            type: 'none',
+            host: DOMAIN,
+            path: '/',
+            tls: 'tls',
+            sni: DOMAIN
+        };
+        const vmessURL = 'vmess://' + Buffer.from(JSON.stringify(vmessConfig)).toString('base64');
+
+        // 生成Trojan URL
+        const trojanURL = \`trojan://\${UUID}@\${CF_DOMAIN}:443?security=tls&type=ws&host=\${DOMAIN}&path=%2F&sni=\${DOMAIN}#\${nodeName}-Trojan\`;
+
+        // 根据选择的协议返回相应的URL
+        if (protocol === 'all') {
+            // 返回所有协议的URL
+            const allURLs = vlessURL + '\\n' + vmessURL + '\\n' + trojanURL;
+            console.log('生成的所有协议URL:');
+            console.log(vlessURL);
+            console.log(vmessURL);
+            console.log(trojanURL);
+            base64Content = Buffer.from(allURLs).toString('base64');
+        } else if (protocol === 'vless') {
+            // 返回VLESS URL
+            console.log('生成的VLESS URL:', vlessURL);
+            base64Content = Buffer.from(vlessURL).toString('base64');
+        } else if (protocol === 'vmess') {
+            // 返回VMess URL
+            console.log('生成的VMess URL:', vmessURL);
+            base64Content = Buffer.from(vmessURL).toString('base64');
+        } else if (protocol === 'trojan') {
+            // 返回Trojan URL
+            console.log('生成的Trojan URL:', trojanURL);
+            base64Content = Buffer.from(trojanURL).toString('base64');
+        }
+
+        console.log('Base64编码后的URL:');
+        console.log(base64Content);
 
         res.writeHead(200, {
             'Content-Type': 'text/plain',
@@ -462,7 +581,13 @@ EOF
         nohup node index.js > node.log 2>&1 &
         echo $! > node.pid
         print_success "WebSocket服务已启动，PID: $(cat node.pid)"
-        echo -e "${GREEN}您的VLESS订阅地址是：${NC}https://${DOMAIN}/sub"
+
+        if [ "$PROTOCOL" = "all" ]; then
+            echo -e "${GREEN}您的多协议订阅地址是：${NC}https://${DOMAIN}/sub"
+            echo -e "${YELLOW}此订阅包含VLESS、VMess和Trojan三种协议的节点${NC}"
+        else
+            echo -e "${GREEN}您的${PROTOCOL_NAME}订阅地址是：${NC}https://${DOMAIN}/sub"
+        fi
     else
         print_error "未找到Node.js版本，请确保已正确创建Node.js应用"
         return 1
@@ -523,7 +648,17 @@ start_nezha_process() {
     # 启动哪吒探针
     print_info "启动哪吒探针..."
     cd "$HOME"
-    env NZ_SERVER="$NEZHA_SERVER" NZ_TLS=$NEZHA_TLS NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
+
+    # 根据配置决定使用哪吒v0还是v1
+    if [ -n "$NEZHA_PORT" ]; then
+        # 使用哪吒v0
+        print_info "使用哪吒v0..."
+        env NZ_SERVER="$NEZHA_SERVER" NZ_PORT="$NEZHA_PORT" NZ_KEY="$NEZHA_KEY" NZ_TLS="$NEZHA_TLS" ./agent.sh > /dev/null 2>&1 &
+    else
+        # 使用哪吒v1
+        print_info "使用哪吒v1..."
+        env NZ_SERVER="$NEZHA_SERVER" NZ_TLS=$NEZHA_TLS NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
+    fi
 }
 
 # 强制重新安装

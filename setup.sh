@@ -11,9 +11,15 @@ NC='\033[0m' # No Color
 # 脚本版本
 VERSION="1.0.0"
 
+# 全局变量
+HAS_UPDATES=false
+UPDATE_LIST=""
+WS_UPDATE_INFO=""
+ARGO_UPDATE_INFO=""
+
 # 获取运行统计
 get_run_stats() {
-    # 使用curl获取统计数据，超时设置为3秒
+    # 使用curl获取统计数据，超时设置为3秒，但不显示输出
     local stats_data=$(curl -s -m 3 "https://visit.okyes.filegear-sg.me/?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh" 2>/dev/null)
 
     # 解析统计数据
@@ -62,7 +68,8 @@ get_script_version() {
 # 获取GitHub上脚本的最新版本号
 get_github_version() {
     local script_file=$1
-    local github_content=$(curl -s "https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/$script_file")
+    # 使用-s参数静默下载，不显示进度条或错误信息
+    local github_content=$(curl -s "https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/$script_file" 2>/dev/null)
     if [ -n "$github_content" ]; then
         local version=$(echo "$github_content" | grep -o 'VERSION="[0-9.]*"' | grep -o '[0-9.]*')
         echo "$version"
@@ -112,7 +119,8 @@ compare_versions() {
 download_script() {
     local script_file=$1
     print_info "下载 $script_file..."
-    curl -L "https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/$script_file" -o "$script_file"
+    # 使用-s参数静默下载，不显示进度条
+    curl -s -L "https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/$script_file" -o "$script_file"
     if [ $? -eq 0 ]; then
         chmod +x "$script_file"
         print_success "成功下载 $script_file"
@@ -140,66 +148,25 @@ download_specific_script() {
 
 # 检查脚本更新
 check_script_updates() {
-    local has_updates=false
-    local update_list=""
-
-    # 检查setup-ws.sh
-    if [ -f "setup-ws.sh" ]; then
-        local local_version=$(get_script_version "setup-ws.sh")
-        local github_version=$(get_github_version "setup-ws.sh")
-
-        compare_versions "$local_version" "$github_version"
-        if [ $? -eq 1 ]; then
-            has_updates=true
-            update_list="$update_list\n- setup-ws.sh: $local_version -> $github_version"
-        fi
-    fi
-
-    # 检查setup-argo.sh
-    if [ -f "setup-argo.sh" ]; then
-        local local_version=$(get_script_version "setup-argo.sh")
-        local github_version=$(get_github_version "setup-argo.sh")
-
-        compare_versions "$local_version" "$github_version"
-        if [ $? -eq 1 ]; then
-            has_updates=true
-            update_list="$update_list\n- setup-argo.sh: $local_version -> $github_version"
-        fi
-    fi
-
-    # 检查setup.sh自身
-    local self_local_version="$VERSION"
-    local self_github_version=$(get_github_version "setup.sh")
-
-    compare_versions "$self_local_version" "$self_github_version"
-    if [ $? -eq 1 ]; then
-        has_updates=true
-        update_list="$update_list\n- setup.sh: $self_local_version -> $self_github_version"
-    fi
-
-    # 显示更新信息
-    if [ "$has_updates" = true ]; then
+    # 使用已经检测到的更新信息
+    if [ "$HAS_UPDATES" = true ]; then
         print_info "发现以下脚本有更新:"
-        echo -e "$update_list"
+        echo -e "$UPDATE_LIST"
 
         read -p "是否更新这些脚本? (Y/n): " update_choice
         update_choice=${update_choice:-Y}
 
         if [[ $update_choice =~ ^[Yy]$ ]]; then
             # 更新脚本
-            if [ -f "setup-ws.sh" ]; then
+            if [ -f "setup-ws.sh" ] && [ -n "$WS_UPDATE_INFO" ]; then
                 download_script "setup-ws.sh"
             fi
 
-            if [ -f "setup-argo.sh" ]; then
+            if [ -f "setup-argo.sh" ] && [ -n "$ARGO_UPDATE_INFO" ]; then
                 download_script "setup-argo.sh"
             fi
 
-            # 更新setup.sh自身
-            download_script "setup.sh"
-
-            print_success "脚本更新完成，请重新运行setup.sh"
-            exit 0
+            print_success "脚本更新完成"
         else
             print_info "跳过脚本更新"
         fi
@@ -211,13 +178,60 @@ check_script_updates() {
 # 统计用户选择
 record_choice() {
     local choice=$1
-    curl -s -m 3 "https://visit.okyes.filegear-sg.me/?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh&choice=$choice" 2>/dev/null &
+    # 使用>/dev/null屏蔽所有输出
+    curl -s -m 3 "https://visit.okyes.filegear-sg.me/?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh&choice=$choice" >/dev/null 2>&1 &
+}
+
+# 检查脚本更新状态
+check_update_status() {
+    local has_updates=false
+    local update_list=""
+
+    # 检查setup-ws.sh
+    if [ -f "setup-ws.sh" ]; then
+        local local_version=$(get_script_version "setup-ws.sh")
+        local github_version=$(get_github_version "setup-ws.sh")
+
+        compare_versions "$local_version" "$github_version"
+        if [ $? -eq 1 ]; then
+            has_updates=true
+            WS_UPDATE_INFO="setup-ws.sh: $local_version -> $github_version"
+            update_list="$update_list\n- $WS_UPDATE_INFO"
+        fi
+    fi
+
+    # 检查setup-argo.sh
+    if [ -f "setup-argo.sh" ]; then
+        local local_version=$(get_script_version "setup-argo.sh")
+        local github_version=$(get_github_version "setup-argo.sh")
+
+        compare_versions "$local_version" "$github_version"
+        if [ $? -eq 1 ]; then
+            has_updates=true
+            ARGO_UPDATE_INFO="setup-argo.sh: $local_version -> $github_version"
+            update_list="$update_list\n- $ARGO_UPDATE_INFO"
+        fi
+    fi
+
+    # 设置全局更新状态
+    if [ "$has_updates" = true ]; then
+        HAS_UPDATES=true
+        UPDATE_LIST="$update_list"
+    else
+        HAS_UPDATES=false
+        UPDATE_LIST=""
+    fi
 }
 
 # 主函数
 main() {
     # 获取运行统计
     get_run_stats
+
+    # 检查脚本更新状态
+    HAS_UPDATES=false
+    UPDATE_LIST=""
+    check_update_status
 
     # 显示欢迎信息
     clear
@@ -237,14 +251,29 @@ main() {
     echo ""
     echo -e "${YELLOW}注意: Argo隧道WebSocket代理服务正在测试中，暂时不可用${NC}"
     echo ""
-    echo "2. 检查脚本更新"
-    echo "   - 检查并更新已下载的脚本"
+
+    # 根据是否有更新显示不同的选项2
+    if [ "$HAS_UPDATES" = true ]; then
+        echo -e "2. ${GREEN}检查脚本更新 [有可用更新!]${NC}"
+        echo "   - 发现以下脚本有更新:"
+        echo -e "$UPDATE_LIST"
+    else
+        echo "2. 检查脚本更新"
+        echo "   - 检查并更新已下载的脚本"
+    fi
+    echo ""
+    echo "0. 退出脚本"
     echo ""
 
     read -p "请输入选项 [1]: " choice
     choice=${choice:-1}
 
     case $choice in
+        0)
+            # 用户选择退出
+            print_info "退出脚本..."
+            exit 0
+            ;;
         1)
             # 统计用户选择了WebSocket版本
             record_choice "ws"
@@ -287,7 +316,7 @@ main() {
             fi
             ;;
         *)
-            print_error "无效选项，请重新运行脚本并选择1-2之间的数字"
+            print_error "无效选项，请选择0-2之间的数字"
             exit 1
             ;;
     esac

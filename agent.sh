@@ -124,12 +124,18 @@ init() {
 install() {
     echo "Installing..."
 
-    # 检查是否已经下载了文件
-    LOCAL_FILE="$HOME/nezha-agent_${os}_${os_arch}.zip"
+    # 使用用户目录而不是/tmp目录
+    TEMP_DIR="$HOME/nezha_temp"
+    mkdir -p "$TEMP_DIR"
 
-    if [ -f "$LOCAL_FILE" ]; then
-        echo "Using existing local file: $LOCAL_FILE"
-        cp "$LOCAL_FILE" /tmp/nezha-agent_${os}_${os_arch}.zip
+    # 检查是否已经下载了文件
+    if [ -f "nezha-agent_linux_amd64.zip" ] && [ "$os" = "linux" ] && [ "$os_arch" = "amd64" ]; then
+        echo "Using existing file in current directory: nezha-agent_linux_amd64.zip"
+        cp "nezha-agent_linux_amd64.zip" "$TEMP_DIR/nezha-agent_${os}_${os_arch}.zip"
+        if [ $? -ne 0 ]; then
+            err "Failed to copy file to $TEMP_DIR"
+            exit 1
+        fi
     else
         # 使用固定的GitHub URL，避免重定向问题
         NZ_AGENT_URL="https://github.com/nezhahq/agent/releases/download/v1.12.2/nezha-agent_${os}_${os_arch}.zip"
@@ -137,23 +143,52 @@ install() {
         echo "Downloading from: $NZ_AGENT_URL"
 
         # 直接使用wget命令，不使用eval，并显示下载进度
-        if ! wget -T 60 -O /tmp/nezha-agent_${os}_${os_arch}.zip "$NZ_AGENT_URL"; then
-            # 如果下载失败，检查当前目录是否有下载好的文件
-            if [ -f "nezha-agent_linux_amd64.zip" ] && [ "$os" = "linux" ] && [ "$os_arch" = "amd64" ]; then
-                echo "Using existing file in current directory: nezha-agent_linux_amd64.zip"
-                cp "nezha-agent_linux_amd64.zip" /tmp/nezha-agent_${os}_${os_arch}.zip
-            else
-                err "Download nezha-agent release failed, check your network connectivity"
-                err "Please download the file manually and place it in the current directory"
-                exit 1
-            fi
+        if ! wget -T 60 -O "$TEMP_DIR/nezha-agent_${os}_${os_arch}.zip" "$NZ_AGENT_URL"; then
+            err "Download nezha-agent release failed, check your network connectivity"
+            err "Please download the file manually and place it in the current directory"
+            exit 1
         fi
     fi
 
-    mkdir -p $NZ_AGENT_PATH
+    # 验证文件是否存在
+    if [ ! -f "$TEMP_DIR/nezha-agent_${os}_${os_arch}.zip" ]; then
+        err "File not found: $TEMP_DIR/nezha-agent_${os}_${os_arch}.zip"
+        exit 1
+    fi
 
-    unzip -qo /tmp/nezha-agent_${os}_${os_arch}.zip -d $NZ_AGENT_PATH &&
-        rm -rf /tmp/nezha-agent_${os}_${os_arch}.zip
+    # 创建agent目录
+    mkdir -p "$NZ_AGENT_PATH"
+    if [ $? -ne 0 ]; then
+        err "Failed to create directory: $NZ_AGENT_PATH"
+        exit 1
+    fi
+
+    # 解压文件
+    echo "Extracting file to $NZ_AGENT_PATH..."
+    unzip -o "$TEMP_DIR/nezha-agent_${os}_${os_arch}.zip" -d "$NZ_AGENT_PATH"
+    if [ $? -ne 0 ]; then
+        err "Failed to extract file"
+        exit 1
+    fi
+    
+    # 检查解压后的文件是否存在
+    if [ ! -f "$NZ_AGENT_PATH/nezha-agent" ]; then
+        err "Extracted file not found: $NZ_AGENT_PATH/nezha-agent"
+        # 尝试直接复制已下载的文件到目标位置
+        if [ -f "nezha-agent" ]; then
+            echo "Found nezha-agent in current directory, copying..."
+            cp "nezha-agent" "$NZ_AGENT_PATH/nezha-agent"
+            chmod +x "$NZ_AGENT_PATH/nezha-agent"
+        else
+            exit 1
+        fi
+    fi
+    
+    # 设置执行权限
+    chmod +x "$NZ_AGENT_PATH/nezha-agent"
+    
+    # 清理临时文件
+    rm -f "$TEMP_DIR/nezha-agent_${os}_${os_arch}.zip"
 
     path="$NZ_AGENT_PATH/config.yml"
     if [ -f "$path" ]; then

@@ -35,22 +35,6 @@ deps_check() {
     done
 }
 
-geo_check() {
-    api_list="https://blog.cloudflare.com/cdn-cgi/trace https://developers.cloudflare.com/cdn-cgi/trace"
-    ua="Mozilla/5.0 (X11; Linux x86_64; rv:60.0) Gecko/20100101 Firefox/81.0"
-    set -- "$api_list"
-    for url in $api_list; do
-        text="$(curl -A "$ua" -m 10 -s "$url")"
-        endpoint="$(echo "$text" | sed -n 's/.*h=\([^ ]*\).*/\1/p')"
-        if echo "$text" | grep -qw 'CN'; then
-            isCN=true
-            break
-        elif echo "$url" | grep -q "$endpoint"; then
-            break
-        fi
-    done
-}
-
 env_check() {
     mach=$(uname -m)
     case "$mach" in
@@ -105,51 +89,82 @@ env_check() {
 init() {
     deps_check
     env_check
-
-    ## China_IP
-    if [ -z "$CN" ]; then
-        geo_check
-        if [ -n "$isCN" ]; then
-            CN=true
-        fi
-    fi
-
-    if [ -z "$CN" ]; then
-        GITHUB_URL="github.com"
-    else
-        GITHUB_URL="gitee.com"
-    fi
 }
 
 install() {
     echo "Installing..."
 
-    # 使用固定版本的URL，避免重定向问题
-    if [ -z "$CN" ]; then
-        NZ_AGENT_URL="https://github.com/nezhahq/agent/releases/download/v1.12.2/nezha-agent_${os}_${os_arch}.zip"
+    # 检查是否已经下载了文件
+    if [ -f "nezha-agent_linux_amd64.zip" ] && [ "$os" = "linux" ] && [ "$os_arch" = "amd64" ]; then
+        echo "Using existing file in current directory: nezha-agent_linux_amd64.zip"
+        AGENT_ZIP="nezha-agent_linux_amd64.zip"
     else
-        NZ_AGENT_URL="https://gitee.com/naibahq/agent/releases/download/v1.12.2/nezha-agent_${os}_${os_arch}.zip"
+        # 尝试获取最新版本
+        LATEST_VERSION=$(curl -s https://api.github.com/repos/nezhahq/agent/releases/latest | grep -o '"tag_name": ".*"' | cut -d'"' -f4)
+        if [ -n "$LATEST_VERSION" ]; then
+            echo "Found latest version: $LATEST_VERSION"
+            NZ_AGENT_URL="https://github.com/nezhahq/agent/releases/download/${LATEST_VERSION}/nezha-agent_${os}_${os_arch}.zip"
+        else
+            echo "Failed to get latest version, using fallback version v1.12.2"
+            NZ_AGENT_URL="https://github.com/nezhahq/agent/releases/download/v1.12.2/nezha-agent_${os}_${os_arch}.zip"
+        fi
+
+        echo "Downloading from: $NZ_AGENT_URL"
+        AGENT_ZIP="nezha-agent_${os}_${os_arch}.zip"
+
+        # 尝试下载最新版本
+        if ! wget -T 60 -O "$AGENT_ZIP" "$NZ_AGENT_URL"; then
+            echo "Failed to download latest version, trying fallback version v1.12.2"
+
+            # 设置回退版本URL
+            FALLBACK_URL="https://github.com/nezhahq/agent/releases/download/v1.12.2/nezha-agent_${os}_${os_arch}.zip"
+
+            echo "Downloading fallback from: $FALLBACK_URL"
+
+            # 尝试下载回退版本
+            if ! wget -T 60 -O "$AGENT_ZIP" "$FALLBACK_URL"; then
+                err "Download nezha-agent release failed, check your network connectivity"
+                exit 1
+            fi
+        fi
     fi
 
-    echo "Downloading from: $NZ_AGENT_URL"
+    # 验证文件是否存在
+    if [ ! -f "$AGENT_ZIP" ]; then
+        err "File not found: $AGENT_ZIP"
+        exit 1
+    fi
 
-    # 尝试下载
-    _cmd="wget -T 60 -O /tmp/nezha-agent_${os}_${os_arch}.zip $NZ_AGENT_URL"
-    if ! eval "$_cmd"; then
-        # 如果下载失败，检查当前目录是否有下载好的文件
-        if [ -f "nezha-agent_linux_amd64.zip" ] && [ "$os" = "linux" ] && [ "$os_arch" = "amd64" ]; then
-            echo "Using existing file in current directory: nezha-agent_linux_amd64.zip"
-            cp "nezha-agent_linux_amd64.zip" /tmp/nezha-agent_${os}_${os_arch}.zip
+    # 创建agent目录
+    mkdir -p "$NZ_AGENT_PATH"
+    if [ $? -ne 0 ]; then
+        err "Failed to create directory: $NZ_AGENT_PATH"
+        exit 1
+    fi
+
+    # 解压文件
+    echo "Extracting file to $NZ_AGENT_PATH..."
+    unzip -o "$AGENT_ZIP" -d "$NZ_AGENT_PATH"
+    if [ $? -ne 0 ]; then
+        err "Failed to extract file"
+        exit 1
+    fi
+
+    # 检查解压后的文件是否存在
+    if [ ! -f "$NZ_AGENT_PATH/nezha-agent" ]; then
+        err "Extracted file not found: $NZ_AGENT_PATH/nezha-agent"
+        # 尝试直接复制已下载的文件到目标位置
+        if [ -f "nezha-agent" ]; then
+            echo "Found nezha-agent in current directory, copying..."
+            cp "nezha-agent" "$NZ_AGENT_PATH/nezha-agent"
+            chmod +x "$NZ_AGENT_PATH/nezha-agent"
         else
-            err "Download nezha-agent release failed, check your network connectivity"
             exit 1
         fi
     fi
 
-    mkdir -p $NZ_AGENT_PATH
-
-    unzip -qo /tmp/nezha-agent_${os}_${os_arch}.zip -d $NZ_AGENT_PATH &&
-        rm -rf /tmp/nezha-agent_${os}_${os_arch}.zip
+    # 设置执行权限
+    chmod +x "$NZ_AGENT_PATH/nezha-agent"
 
     path="$NZ_AGENT_PATH/config.yml"
     if [ -f "$path" ]; then

@@ -115,11 +115,17 @@ check_processes() {
     NODE_RUNNING=false
     NEZHA_RUNNING=false
 
-    # 简化的WebSocket服务进程检测
+    # WebSocket服务进程检测 - 支持多种Node.js进程类型
     if ps aux | grep "lsnode:" | grep -v grep > /dev/null; then
         NODE_RUNNING=true
         NODE_PID=$(ps aux | grep "lsnode:" | grep -v grep | awk '{print $2}')
         NODE_TYPE="lsnode"
+        
+    # 检测通用node index.js进程
+    elif ps aux | grep "node index.js" | grep -v grep > /dev/null; then
+        NODE_RUNNING=true
+        NODE_PID=$(ps aux | grep "node index.js" | grep -v grep | awk '{print $2}')
+        NODE_TYPE="node"
     fi
 
     # 简化的哪吒探针进程检测
@@ -152,7 +158,7 @@ guide_nodejs_creation() {
     print_info "请按照以下步骤在控制面板中创建Node.js应用程序:"
     echo "1. 进入控制面板 -> Node.js APP"
     echo "2. 点击\"创建应用程序\""
-    echo "3. Node.js版本: 选择最新版本"
+    echo "3. Node.js版本: 选择V20或者V18版本"
     echo "4. Application root: domains/$1/public_html"
     echo "5. Application startup file: index.js"
     echo "6. 点击\"创建\"按钮"

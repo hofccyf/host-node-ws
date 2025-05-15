@@ -189,7 +189,7 @@ guide_nodejs_creation() {
     print_info "请按照以下步骤在控制面板中创建Node.js应用程序:"
     echo "1. 进入控制面板 -> Node.js APP"
     echo "2. 点击\"创建应用程序\""
-    echo "3. Node.js版本: 选择最新版本"
+    echo "3. Node.js版本: 选择V20或者V18版本"
     echo "4. Application root: domains/$1/public_html"
     echo "5. Application startup file: argows.js"
     echo "6. 点击\"创建\"按钮"

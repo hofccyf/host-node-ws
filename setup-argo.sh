@@ -103,9 +103,34 @@ check_config() {
 # 加载配置文件
 load_config() {
     if [ -f "$CONFIG_FILE" ]; then
+        echo "===== 调试: 加载配置文件 $CONFIG_FILE =====" >> debug.log
+        echo "配置文件内容:" >> debug.log
+        cat "$CONFIG_FILE" >> debug.log
+        echo "===== 配置文件内容结束 =====" >> debug.log
+
+        # 加载配置
         source "$CONFIG_FILE"
+
+        # 验证配置是否正确加载
+        echo "===== 调试: 配置加载后的变量值 =====" >> debug.log
+        echo "UUID=$UUID" >> debug.log
+        echo "DOMAIN=$DOMAIN" >> debug.log
+        echo "CF_DOMAIN=$CF_DOMAIN" >> debug.log
+        echo "NODE_NAME=$NODE_NAME" >> debug.log
+        echo "PORT=$PORT" >> debug.log
+        echo "NEZHA_SERVER=$NEZHA_SERVER" >> debug.log
+        echo "NEZHA_PORT=$NEZHA_PORT" >> debug.log
+        echo "NEZHA_KEY=$NEZHA_KEY" >> debug.log
+        echo "ARGO_DOMAIN=$ARGO_DOMAIN" >> debug.log
+        echo "ARGO_AUTH=$ARGO_AUTH" >> debug.log
+        echo "ARGO_PORT=$ARGO_PORT" >> debug.log
+        echo "AUTO_ACCESS=$AUTO_ACCESS" >> debug.log
+        echo "PROJECT_URL=$PROJECT_URL" >> debug.log
+        echo "===== 配置加载验证结束 =====" >> debug.log
+
         return 0
     else
+        echo "===== 调试: 配置文件 $CONFIG_FILE 不存在 =====" >> debug.log
         return 1
     fi
 }
@@ -293,7 +318,7 @@ modify_config() {
     read -p "请输入哪吒服务器地址 (v1格式: nz.example.com:端口号；v0格式: nz.example.com，回车跳过配置哪吒探针): " nezha_server
 
     if [ -n "$nezha_server" ]; then
-        read -p "请输入哪吒客户端密钥 (可选): " nezha_key
+        read -p "请输入哪吒客户端密钥 (必填): " nezha_key
 
         # 自动检测哪吒版本（通过检查服务器地址是否包含端口号）
         if [[ "$nezha_server" == *":"* ]]; then
@@ -427,6 +452,25 @@ EOF
 
         # 设置环境变量并启动服务
         print_info "启动Argo代理服务..."
+
+        # 调试: 输出配置文件中的变量值
+        echo "===== 调试信息: 配置文件中的变量值 =====" > debug.log
+        echo "UUID=$UUID" >> debug.log
+        echo "DOMAIN=$DOMAIN" >> debug.log
+        echo "CF_DOMAIN=$CF_DOMAIN" >> debug.log
+        echo "NODE_NAME=$NODE_NAME" >> debug.log
+        echo "PORT=$PORT" >> debug.log
+        echo "NEZHA_SERVER=$NEZHA_SERVER" >> debug.log
+        echo "NEZHA_PORT=$NEZHA_PORT" >> debug.log
+        echo "NEZHA_KEY=$NEZHA_KEY" >> debug.log
+        echo "ARGO_DOMAIN=$ARGO_DOMAIN" >> debug.log
+        echo "ARGO_AUTH=$ARGO_AUTH" >> debug.log
+        echo "ARGO_PORT=$ARGO_PORT" >> debug.log
+        echo "AUTO_ACCESS=$AUTO_ACCESS" >> debug.log
+        echo "PROJECT_URL=$PROJECT_URL" >> debug.log
+        echo "===== 调试信息结束 =====" >> debug.log
+
+        # 导出环境变量
         export UUID="$UUID"
         export DOMAIN="$DOMAIN"
         export CF_DOMAIN="$CF_DOMAIN"
@@ -441,7 +485,48 @@ EOF
         export AUTO_ACCESS="$AUTO_ACCESS"
         export PROJECT_URL="$PROJECT_URL"
 
+        # 调试: 验证环境变量是否正确设置
+        echo "===== 调试信息: 环境变量验证 =====" >> debug.log
+        echo "env UUID=$(env | grep UUID)" >> debug.log
+        echo "env DOMAIN=$(env | grep DOMAIN)" >> debug.log
+        echo "env CF_DOMAIN=$(env | grep CF_DOMAIN)" >> debug.log
+        echo "env NAME=$(env | grep NAME)" >> debug.log
+        echo "env PORT=$(env | grep PORT)" >> debug.log
+        echo "env NEZHA_SERVER=$(env | grep NEZHA_SERVER)" >> debug.log
+        echo "env NEZHA_PORT=$(env | grep NEZHA_PORT)" >> debug.log
+        echo "env NEZHA_KEY=$(env | grep NEZHA_KEY)" >> debug.log
+        echo "env ARGO_DOMAIN=$(env | grep ARGO_DOMAIN)" >> debug.log
+        echo "env ARGO_AUTH=$(env | grep ARGO_AUTH)" >> debug.log
+        echo "env ARGO_PORT=$(env | grep ARGO_PORT)" >> debug.log
+        echo "env AUTO_ACCESS=$(env | grep AUTO_ACCESS)" >> debug.log
+        echo "env PROJECT_URL=$(env | grep PROJECT_URL)" >> debug.log
+        echo "===== 环境变量验证结束 =====" >> debug.log
+
+        # 创建一个临时脚本来验证环境变量传递
+        cat > "$DOMAIN_DIR/env_test.js" << EOF
+console.log("===== Node.js环境变量测试 =====");
+console.log("UUID:", process.env.UUID);
+console.log("DOMAIN:", process.env.DOMAIN);
+console.log("CF_DOMAIN:", process.env.CF_DOMAIN);
+console.log("NAME:", process.env.NAME);
+console.log("PORT:", process.env.PORT);
+console.log("NEZHA_SERVER:", process.env.NEZHA_SERVER);
+console.log("NEZHA_PORT:", process.env.NEZHA_PORT);
+console.log("NEZHA_KEY:", process.env.NEZHA_KEY);
+console.log("ARGO_DOMAIN:", process.env.ARGO_DOMAIN);
+console.log("ARGO_AUTH:", process.env.ARGO_AUTH);
+console.log("ARGO_PORT:", process.env.ARGO_PORT);
+console.log("AUTO_ACCESS:", process.env.AUTO_ACCESS);
+console.log("PROJECT_URL:", process.env.PROJECT_URL);
+console.log("===== 测试结束 =====");
+EOF
+
+        # 运行测试脚本
+        print_info "测试环境变量传递..."
+        node "$DOMAIN_DIR/env_test.js" >> debug.log 2>&1
+
         # 启动Node.js应用
+        print_info "启动Node.js应用..."
         nohup node argows.js > argo.log 2>&1 &
         echo $! > argo.pid
         print_success "Argo代理服务已启动，PID: $(cat argo.pid)"

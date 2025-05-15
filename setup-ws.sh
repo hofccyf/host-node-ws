@@ -13,8 +13,8 @@ VERSION="1.3.2"
 
 # 获取运行统计
 get_run_stats() {
-    # 使用curl获取统计数据，超时设置为3秒
-    local stats_data=$(curl -s -m 3 "https://visit.okyes.filegear-sg.me/?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh" 2>/dev/null)
+    # 使用curl获取统计数据，超时设置为2秒
+    local stats_data=$(curl -s -m 2 "http://counter.kfcyes.dpdns.org/counter.php?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup-ws.sh" 2>/dev/null)
 
     # 解析统计数据
     if [ -n "$stats_data" ]; then
@@ -261,9 +261,6 @@ modify_config() {
     # 询问反代域名（可选）
     read -p "请输入反代域名 (如果没有可回车默认使用www.visa.com.tw): " cf_domain
     cf_domain=${cf_domain:-"www.visa.com.tw"}
-
-    # 使用VLESS协议
-    print_info "使用VLESS协议"
 
     # 询问哪吒探针信息（可选）
     read -p "请输入哪吒服务器地址 (v1格式: nz.example.com:端口号；v0格式: nz.example.com，回车跳过配置哪吒探针): " nezha_server

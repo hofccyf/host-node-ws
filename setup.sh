@@ -20,8 +20,8 @@ SETUP_UPDATE_INFO=""
 
 # 获取运行统计
 get_run_stats() {
-    # 使用curl获取统计数据，超时设置为3秒，但不显示输出
-    local stats_data=$(curl -s -m 3 "https://visit.okyes.filegear-sg.me/?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh" 2>/dev/null)
+    # 使用curl获取统计数据，超时设置为2秒，但不显示输出
+    local stats_data=$(curl -s -m 2 "http://counter.kfcyes.dpdns.org/counter.php?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh" 2>/dev/null)
 
     # 解析统计数据
     if [ -n "$stats_data" ]; then
@@ -187,7 +187,7 @@ check_script_updates() {
 record_choice() {
     local choice=$1
     # 使用>/dev/null屏蔽所有输出
-    curl -s -m 3 "https://visit.okyes.filegear-sg.me/?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh&choice=$choice" >/dev/null 2>&1 &
+    curl -s -m 2 "http://counter.kfcyes.dpdns.org/counter.php?url=https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh&choice=$choice" >/dev/null 2>&1 &
 }
 
 # 检查脚本更新状态

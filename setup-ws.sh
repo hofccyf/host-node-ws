@@ -9,7 +9,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 脚本版本
-VERSION="1.3.0"
+VERSION="1.3.1"
 
 # 获取运行统计
 get_run_stats() {
@@ -234,7 +234,7 @@ modify_config() {
     node_name=${node_name:-"hostvps"}
 
     # 询问端口号
-    read -p "请输入监听端口 (默认: 3000): " port
+    read -p "请输入监听端口 (默认: 3000，必须更换): " port
     port=${port:-3000}
 
     # UUID处理
@@ -262,40 +262,8 @@ modify_config() {
     read -p "请输入反代域名 (如果没有可回车默认使用www.visa.com.tw): " cf_domain
     cf_domain=${cf_domain:-"www.visa.com.tw"}
 
-    # 询问代理协议
-    echo "请选择代理协议:"
-    echo "1. VLESS (默认)"
-    echo "2. VMess"
-    echo "3. Trojan"
-    echo "4. 订阅全部节点"
-    read -p "请选择 [1-4]: " protocol_choice
-    protocol_choice=${protocol_choice:-1}
-
-    case $protocol_choice in
-        1)
-            protocol="vless"
-            protocol_name="VLESS"
-            ;;
-        2)
-            protocol="vmess"
-            protocol_name="VMess"
-            ;;
-        3)
-            protocol="trojan"
-            protocol_name="Trojan"
-            ;;
-        4)
-            protocol="all"
-            protocol_name="ALL"
-            ;;
-        *)
-            print_warning "无效选择，使用默认协议VLESS"
-            protocol="vless"
-            protocol_name="VLESS"
-            ;;
-    esac
-
-    print_info "已选择协议: $protocol_name"
+    # 使用VLESS协议
+    print_info "使用VLESS协议"
 
     # 询问哪吒探针信息（可选）
     read -p "请输入哪吒服务器地址 (v1格式: nz.example.com:端口号；v0格式: nz.example.com，回车跳过配置哪吒探针): " nezha_server
@@ -359,8 +327,6 @@ NODE_NAME="$node_name"
 PORT="$port"
 UUID="$uuid"
 CF_DOMAIN="$cf_domain"
-PROTOCOL="$protocol"
-PROTOCOL_NAME="$protocol_name"
 
 # 哪吒探针配置
 NEZHA_SERVER="$nezha_server"
@@ -388,8 +354,14 @@ start_websocket() {
     # 检查Node.js应用是否已创建
     NODE_ENV_PATH="/home/$username/nodevenv/domains/$DOMAIN/public_html"
     if [ ! -d "$NODE_ENV_PATH" ]; then
-        print_warning "未检测到Node.js应用环境，请先创建Node.js应用"
+        print_error "未检测到Node.js应用环境，请先创建Node.js应用"
         guide_nodejs_creation "$DOMAIN"
+        return 1
+    fi
+
+    # 检查端口是否被占用
+    if lsof -i:$PORT -t &> /dev/null; then
+        print_error "端口 $PORT 已被占用，请修改配置文件中的端口或停止占用该端口的进程"
         return 1
     fi
 
@@ -423,55 +395,13 @@ const httpServer = http.createServer((req, res) => {
         console.log(\`UUID: \${UUID}, DOMAIN: \${DOMAIN}, NAME: \${NAME}\`);
 
         const nodeName = NAME || 'NodeWS';
-        let protocol = process.env.PROTOCOL || '$PROTOCOL' || 'vless';
-        let protocolName = process.env.PROTOCOL_NAME || '$PROTOCOL_NAME' || 'VLESS';
-        let base64Content = '';
 
         // 生成VLESS URL
-        const vlessURL = \`vless://\${UUID}@\${CF_DOMAIN}:443?encryption=none&security=tls&sni=\${DOMAIN}&type=ws&host=\${DOMAIN}&path=%2F#\${nodeName}-VLESS\`;
+        const vlessURL = \`vless://\${UUID}@\${CF_DOMAIN}:443?encryption=none&security=tls&sni=\${DOMAIN}&type=ws&host=\${DOMAIN}&path=%2F#\${nodeName}\`;
+        console.log('生成的VLESS URL:', vlessURL);
 
-        // 生成VMess URL
-        const vmessConfig = {
-            v: '2',
-            ps: \`\${nodeName}-VMess\`,
-            add: CF_DOMAIN,
-            port: '443',
-            id: UUID,
-            aid: '0',
-            net: 'ws',
-            type: 'none',
-            host: DOMAIN,
-            path: '/',
-            tls: 'tls',
-            sni: DOMAIN
-        };
-        const vmessURL = 'vmess://' + Buffer.from(JSON.stringify(vmessConfig)).toString('base64');
-
-        // 生成Trojan URL
-        const trojanURL = \`trojan://\${UUID}@\${CF_DOMAIN}:443?security=tls&type=ws&host=\${DOMAIN}&path=%2F&sni=\${DOMAIN}#\${nodeName}-Trojan\`;
-
-        // 根据选择的协议返回相应的URL
-        if (protocol === 'all') {
-            // 返回所有协议的URL
-            const allURLs = vlessURL + '\\n' + vmessURL + '\\n' + trojanURL;
-            console.log('生成的所有协议URL:');
-            console.log(vlessURL);
-            console.log(vmessURL);
-            console.log(trojanURL);
-            base64Content = Buffer.from(allURLs).toString('base64');
-        } else if (protocol === 'vless') {
-            // 返回VLESS URL
-            console.log('生成的VLESS URL:', vlessURL);
-            base64Content = Buffer.from(vlessURL).toString('base64');
-        } else if (protocol === 'vmess') {
-            // 返回VMess URL
-            console.log('生成的VMess URL:', vmessURL);
-            base64Content = Buffer.from(vmessURL).toString('base64');
-        } else if (protocol === 'trojan') {
-            // 返回Trojan URL
-            console.log('生成的Trojan URL:', trojanURL);
-            base64Content = Buffer.from(trojanURL).toString('base64');
-        }
+        // 转换为Base64
+        const base64Content = Buffer.from(vlessURL).toString('base64');
 
         console.log('Base64编码后的URL:');
         console.log(base64Content);
@@ -577,16 +507,58 @@ EOF
         source "$NODE_ENV_ACTIVATE"
         npm install
 
+        # 如果已有进程在运行，先停止它
+        if [ -f "node.pid" ] && ps -p $(cat node.pid) > /dev/null 2>&1; then
+            print_info "停止已运行的WebSocket服务 (PID: $(cat node.pid))..."
+            kill -9 $(cat node.pid) > /dev/null 2>&1
+            sleep 1
+        fi
+
         # 启动Node.js应用
         nohup node index.js > node.log 2>&1 &
         echo $! > node.pid
-        print_success "WebSocket服务已启动，PID: $(cat node.pid)"
 
-        if [ "$PROTOCOL" = "all" ]; then
-            echo -e "${GREEN}您的多协议订阅地址是：${NC}https://${DOMAIN}/sub"
-            echo -e "${YELLOW}此订阅包含VLESS、VMess和Trojan三种协议的节点${NC}"
+        # 等待服务启动
+        sleep 2
+
+        # 检查服务是否成功启动
+        if ps -p $(cat node.pid) > /dev/null 2>&1; then
+            # 检查日志文件中是否有错误信息
+            if grep -q "Error:" "$DOMAIN_DIR/node.log" || grep -q "error:" "$DOMAIN_DIR/node.log" || grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log"; then
+                print_error "WebSocket服务启动失败，发现错误:"
+                grep -i "error" "$DOMAIN_DIR/node.log" | head -3 | while read -r line; do
+                    echo -e "${RED}$line${NC}"
+                done
+                echo -e "${YELLOW}请查看完整日志文件: $DOMAIN_DIR/node.log${NC}"
+                return 1
+            fi
+
+            # 尝试访问服务检查是否真正运行
+            local check_url="http://localhost:$PORT/"
+            local response=$(curl -s -m 2 "$check_url" 2>/dev/null)
+
+            if [ "$?" -ne 0 ] || [ -z "$response" ]; then
+                print_error "WebSocket服务启动失败，无法访问服务"
+                echo -e "${RED}服务进程存在但无法响应请求${NC}"
+                echo -e "${YELLOW}请查看日志文件: $DOMAIN_DIR/node.log${NC}"
+                return 1
+            fi
+
+            print_success "WebSocket服务已启动，PID: $(cat node.pid)"
+            echo -e "${GREEN}您的VLESS订阅地址是：${NC}https://${DOMAIN}/sub"
         else
-            echo -e "${GREEN}您的${PROTOCOL_NAME}订阅地址是：${NC}https://${DOMAIN}/sub"
+            print_error "WebSocket服务启动失败，进程未运行"
+            echo -e "${RED}请检查日志文件: $DOMAIN_DIR/node.log${NC}"
+
+            # 显示日志中的错误信息
+            if [ -f "$DOMAIN_DIR/node.log" ]; then
+                echo -e "${RED}日志中的错误信息:${NC}"
+                grep -i "error" "$DOMAIN_DIR/node.log" | head -3 | while read -r line; do
+                    echo -e "${RED}$line${NC}"
+                done
+            fi
+
+            return 1
         fi
     else
         print_error "未找到Node.js版本，请确保已正确创建Node.js应用"

@@ -81,11 +81,6 @@ curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh 
 - **监听端口**：WebSocket服务器监听的端口（默认：3000）
 - **UUID**：可以自动生成或手动输入，用于WebSocket连接验证
 - **反代域名**：用于代理连接的反代域名（默认：www.visa.com.tw）
-- **代理协议**：选择以下协议之一
-  - VLESS（默认）
-  - VMess
-  - Trojan
-  - 订阅全部节点（同时包含上述三种协议）
 - **哪吒服务器地址**：哪吒探针服务器地址（可选，自动识别v0/v1版本）
   - v1格式：`nz.example.com:443`（包含端口号）
   - v0格式：`nz.example.com`（不包含端口号，会额外询问端口）
@@ -101,8 +96,8 @@ NODE_NAME="NodeWS"                # 节点名称
 PORT="3000"                       # 内部端口
 UUID="a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6"  # UUID
 CF_DOMAIN="www.visa.com.tw"       # 反代域名
-PROTOCOL="vless"                  # 代理协议：vless, vmess, trojan, all
-PROTOCOL_NAME="VLESS"             # 协议名称：VLESS, VMess, Trojan, ALL
+PROTOCOL="vless"                  # 代理协议
+PROTOCOL_NAME="VLESS"             # 协议名称
 
 # 哪吒探针配置
 NEZHA_SERVER="nezha.example.com:5555"  # 哪吒服务器地址（v1格式）
@@ -130,23 +125,17 @@ NEZHA_TLS="true"                  # v1版本：true/false，v0版本：--tls/空
 
 ## 订阅地址
 
-WebSocket服务启动后，脚本会自动显示您的订阅地址：
+WebSocket服务启动后，脚本会自动显示您的VLESS订阅地址：
 
 ```
-您的[协议名]订阅地址是：https://您的域名/sub
+您的VLESS订阅地址是：https://您的域名/sub
 ```
 
 例如：`https://example.com/sub`
 
-根据您选择的协议，订阅地址会返回不同的内容：
+订阅地址会返回一个Base64编码的VLESS链接，可以直接导入到支持VLESS协议的客户端中。
 
-1. 如果选择了单一协议（VLESS/VMess/Trojan），订阅地址会返回对应协议的链接
-2. 如果选择了"订阅全部节点"，订阅地址会返回包含三种协议的链接：
-   - **VLESS**：节点名称为`您设置的节点名称-VLESS`
-   - **VMess**：节点名称为`您设置的节点名称-VMess`
-   - **Trojan**：节点名称为`您设置的节点名称-Trojan`
-
-所有协议都使用您配置的反代域名作为服务器地址，使用您的实际域名作为SNI和Host参数，这样可以提高连接成功率。
+VLESS链接使用您配置的反代域名作为服务器地址，使用您的实际域名作为SNI和Host参数，这样可以提高连接成功率。
 
 ## 常见问题
 
@@ -168,11 +157,6 @@ WebSocket服务启动后，脚本会自动显示您的订阅地址：
 4. **域名目录检测失败**：
    - 确认您的域名是否已在控制面板中创建
    - 检查域名目录结构是否正确
-
-5. **协议选择问题**：
-   - 如果您不确定使用哪种协议，可以选择"订阅全部节点"
-   - 不同协议在不同网络环境下可能有不同表现
-   - VLESS通常更轻量，VMess提供更多加密选项，Trojan可能在某些限制环境下更稳定
 
 ## 自动保活功能
 
@@ -220,8 +204,7 @@ WebSocket服务启动后，脚本会自动显示您的订阅地址：
 - 统一入口脚本会自动下载缺失的脚本文件
 - 配置信息保存在`~/tmp/ws_config/ws_config.conf`文件中
 - 日志文件存储在`~/tmp/ws_setup_logs/`目录下
-- 支持VLESS/VMess/Trojan三种协议，可以选择单一协议或全部协议
-- 节点名称会包含协议类型，便于区分
+- 仅支持VLESS协议
 
 ## 贡献
 

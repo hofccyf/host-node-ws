@@ -9,7 +9,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 脚本版本
-VERSION="1.4.0"
+VERSION="1.4.2"
 
 # 获取运行统计
 get_run_stats() {
@@ -517,12 +517,6 @@ EOF
                 print_error "WebSocket服务启动失败: 端口 $PORT 已被占用"
                 echo -e "${RED}在共享服务器环境中，即使本机没有使用该端口，其他主机可能已占用该端口${NC}"
 
-                # 显示日志中的错误信息
-                echo -e "\n${RED}日志中的错误信息:${NC}"
-                grep -i "error" "$DOMAIN_DIR/node.log" | grep -i "EADDRINUSE\|address already in use" | head -3 | while read -r line; do
-                    echo -e "${RED}$line${NC}"
-                done
-
                 # 提示用户输入新的端口号
                 echo
                 read -p "请输入新的监听端口号: " new_port
@@ -544,21 +538,7 @@ EOF
 
                 return 1
             elif grep -q "Error:" "$DOMAIN_DIR/node.log" || grep -q "error:" "$DOMAIN_DIR/node.log"; then
-                print_error "WebSocket服务启动失败，发现错误:"
-                grep -i "error" "$DOMAIN_DIR/node.log" | head -3 | while read -r line; do
-                    echo -e "${RED}$line${NC}"
-                done
-                echo -e "${YELLOW}请查看完整日志文件: $DOMAIN_DIR/node.log${NC}"
-                return 1
-            fi
-
-            # 尝试访问服务检查是否真正运行
-            local check_url="http://localhost:$PORT/"
-            local response=$(curl -s -m 2 "$check_url" 2>/dev/null)
-
-            if [ "$?" -ne 0 ] || [ -z "$response" ]; then
-                print_error "WebSocket服务启动失败，无法访问服务"
-                echo -e "${RED}服务进程存在但无法响应请求${NC}"
+                print_error "WebSocket服务启动失败，发现错误"
                 echo -e "${YELLOW}请查看日志文件: $DOMAIN_DIR/node.log${NC}"
                 return 1
             fi
@@ -569,40 +549,28 @@ EOF
             print_error "WebSocket服务启动失败，进程未运行"
             echo -e "${RED}请检查日志文件: $DOMAIN_DIR/node.log${NC}"
 
-            # 显示日志中的错误信息
-            if [ -f "$DOMAIN_DIR/node.log" ]; then
-                echo -e "${RED}日志中的错误信息:${NC}"
-                # 优先检查端口占用错误
-                if grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log" || grep -q "address already in use" "$DOMAIN_DIR/node.log"; then
-                    print_error "检测到端口 $PORT 已被占用"
+            # 检查端口占用错误
+            if [ -f "$DOMAIN_DIR/node.log" ] && (grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log" || grep -q "address already in use" "$DOMAIN_DIR/node.log"); then
+                print_error "检测到端口 $PORT 已被占用"
+                echo -e "${RED}在共享服务器环境中，即使本机没有使用该端口，其他主机可能已占用该端口${NC}"
 
-                    # 显示日志中的错误信息
-                    grep -i "error" "$DOMAIN_DIR/node.log" | grep -i "EADDRINUSE\|address already in use" | head -3 | while read -r line; do
-                        echo -e "${RED}$line${NC}"
-                    done
+                # 提示用户输入新的端口号
+                echo
+                read -p "请输入新的监听端口号: " new_port
 
-                    # 提示用户输入新的端口号
-                    echo
-                    read -p "请输入新的监听端口号: " new_port
+                # 验证端口号是否有效
+                if [[ ! "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then
+                    print_error "无效的端口号，请输入1-65535之间的数字"
+                    return 1
+                fi
 
-                    # 验证端口号是否有效
-                    if [[ ! "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then
-                        print_error "无效的端口号，请输入1-65535之间的数字"
-                        return 1
-                    fi
+                # 更新配置文件中的端口号
+                sed -i "s/^PORT=\"$PORT\"/PORT=\"$new_port\"/" "$CONFIG_FILE"
 
-                    # 更新配置文件中的端口号
-                    sed -i "s/^PORT=\"$PORT\"/PORT=\"$new_port\"/" "$CONFIG_FILE"
-
-                    if [ $? -eq 0 ]; then
-                        print_success "监听端口已修改为 $new_port，请重新启动WebSocket代理服务"
-                    else
-                        print_error "修改配置文件失败，请手动修改配置文件中的PORT值"
-                    fi
+                if [ $? -eq 0 ]; then
+                    print_success "监听端口已修改为 $new_port，请重新启动WebSocket代理服务"
                 else
-                    grep -i "error" "$DOMAIN_DIR/node.log" | head -3 | while read -r line; do
-                        echo -e "${RED}$line${NC}"
-                    done
+                    print_error "修改配置文件失败，请手动修改配置文件中的PORT值"
                 fi
             fi
 

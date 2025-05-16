@@ -340,5 +340,33 @@ main() {
     esac
 }
 
+# 检查并启动所有服务（供cron任务调用）
+check_and_start_all() {
+    # 创建日志目录和固定的cron日志文件
+    CRON_LOG="$HOME/tmp/ws_setup_logs/cron_autorestart.log"
+    mkdir -p "$HOME/tmp/ws_setup_logs"
+
+    # 如果日志文件超过1MB，则清空它
+    if [ -f "$CRON_LOG" ] && [ $(stat -c%s "$CRON_LOG" 2>/dev/null || stat -f%z "$CRON_LOG" 2>/dev/null) -gt 1048576 ]; then
+        echo "=== 日志文件已重置 $(date) ===" > "$CRON_LOG"
+    fi
+
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 执行定时检查..." >> "$CRON_LOG"
+
+    # 调用WebSocket脚本的check_and_start_all函数
+    if [ -f "$HOME/setup-ws.sh" ]; then
+        bash "$HOME/setup-ws.sh" check_and_start_all
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 已调用WebSocket脚本的check_and_start_all函数" >> "$CRON_LOG"
+    else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] WebSocket脚本不存在，无法启动服务" >> "$CRON_LOG"
+    fi
+}
+
+# 处理命令行参数
+if [ "$1" = "check_and_start_all" ]; then
+    check_and_start_all
+    exit 0
+fi
+
 # 执行主函数
 main

@@ -9,7 +9,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # 脚本版本
-VERSION="1.3.2"
+VERSION="1.4.0"
 
 # 获取运行统计
 get_run_stats() {
@@ -115,12 +115,11 @@ check_processes() {
     NODE_RUNNING=false
     NEZHA_RUNNING=false
 
-    # WebSocket服务进程检测 - 支持多种Node.js进程类型
+    # 简化的WebSocket服务进程检测
     if ps aux | grep "lsnode:" | grep -v grep > /dev/null; then
         NODE_RUNNING=true
         NODE_PID=$(ps aux | grep "lsnode:" | grep -v grep | awk '{print $2}')
         NODE_TYPE="lsnode"
-
     # 检测通用node index.js进程
     elif ps aux | grep "node index.js" | grep -v grep > /dev/null; then
         NODE_RUNNING=true
@@ -189,20 +188,17 @@ modify_config() {
 
     # 显示域名列表
     if [ ${#domains[@]} -eq 0 ]; then
-        print_warning "未找到任何域名目录，请手动输入域名"
-        read -p "请输入您的域名 (例如: example.com): " domain
+        print_error "未找到任何域名目录，请先在控制面板中创建域名"
+        return 1
     else
         echo "检测到以下域名:"
         for i in "${!domains[@]}"; do
             echo "[$i] ${domains[$i]}"
         done
 
-        echo "[m] 手动输入其他域名"
-        read -p "请选择域名 [0-$((${#domains[@]}-1))/m]: " domain_choice
+        read -p "请选择域名 [0-$((${#domains[@]}-1))]: " domain_choice
 
-        if [[ "$domain_choice" == "m" ]]; then
-            read -p "请输入您的域名 (例如: example.com): " domain
-        elif [[ "$domain_choice" =~ ^[0-9]+$ ]] && [ "$domain_choice" -ge 0 ] && [ "$domain_choice" -lt ${#domains[@]} ]; then
+        if [[ "$domain_choice" =~ ^[0-9]+$ ]] && [ "$domain_choice" -ge 0 ] && [ "$domain_choice" -lt ${#domains[@]} ]; then
             domain="${domains[$domain_choice]}"
             print_info "已选择域名: $domain"
         else
@@ -356,11 +352,7 @@ start_websocket() {
         return 1
     fi
 
-    # 检查端口是否被占用
-    if lsof -i:$PORT -t &> /dev/null; then
-        print_error "端口 $PORT 已被占用，请修改配置文件中的端口或停止占用该端口的进程"
-        return 1
-    fi
+
 
     # 创建index.js文件
     print_info "创建index.js文件..."
@@ -521,7 +513,37 @@ EOF
         # 检查服务是否成功启动
         if ps -p $(cat node.pid) > /dev/null 2>&1; then
             # 检查日志文件中是否有错误信息
-            if grep -q "Error:" "$DOMAIN_DIR/node.log" || grep -q "error:" "$DOMAIN_DIR/node.log" || grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log"; then
+            if grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log" || grep -q "address already in use" "$DOMAIN_DIR/node.log"; then
+                print_error "WebSocket服务启动失败: 端口 $PORT 已被占用"
+                echo -e "${RED}在共享服务器环境中，即使本机没有使用该端口，其他主机可能已占用该端口${NC}"
+
+                # 显示日志中的错误信息
+                echo -e "\n${RED}日志中的错误信息:${NC}"
+                grep -i "error" "$DOMAIN_DIR/node.log" | grep -i "EADDRINUSE\|address already in use" | head -3 | while read -r line; do
+                    echo -e "${RED}$line${NC}"
+                done
+
+                # 提示用户输入新的端口号
+                echo
+                read -p "请输入新的监听端口号: " new_port
+
+                # 验证端口号是否有效
+                if [[ ! "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then
+                    print_error "无效的端口号，请输入1-65535之间的数字"
+                    return 1
+                fi
+
+                # 更新配置文件中的端口号
+                sed -i "s/^PORT=\"$PORT\"/PORT=\"$new_port\"/" "$CONFIG_FILE"
+
+                if [ $? -eq 0 ]; then
+                    print_success "监听端口已修改为 $new_port，请重新启动WebSocket代理服务"
+                else
+                    print_error "修改配置文件失败，请手动修改配置文件中的PORT值"
+                fi
+
+                return 1
+            elif grep -q "Error:" "$DOMAIN_DIR/node.log" || grep -q "error:" "$DOMAIN_DIR/node.log"; then
                 print_error "WebSocket服务启动失败，发现错误:"
                 grep -i "error" "$DOMAIN_DIR/node.log" | head -3 | while read -r line; do
                     echo -e "${RED}$line${NC}"
@@ -550,9 +572,38 @@ EOF
             # 显示日志中的错误信息
             if [ -f "$DOMAIN_DIR/node.log" ]; then
                 echo -e "${RED}日志中的错误信息:${NC}"
-                grep -i "error" "$DOMAIN_DIR/node.log" | head -3 | while read -r line; do
-                    echo -e "${RED}$line${NC}"
-                done
+                # 优先检查端口占用错误
+                if grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log" || grep -q "address already in use" "$DOMAIN_DIR/node.log"; then
+                    print_error "检测到端口 $PORT 已被占用"
+
+                    # 显示日志中的错误信息
+                    grep -i "error" "$DOMAIN_DIR/node.log" | grep -i "EADDRINUSE\|address already in use" | head -3 | while read -r line; do
+                        echo -e "${RED}$line${NC}"
+                    done
+
+                    # 提示用户输入新的端口号
+                    echo
+                    read -p "请输入新的监听端口号: " new_port
+
+                    # 验证端口号是否有效
+                    if [[ ! "$new_port" =~ ^[0-9]+$ ]] || [ "$new_port" -lt 1 ] || [ "$new_port" -gt 65535 ]; then
+                        print_error "无效的端口号，请输入1-65535之间的数字"
+                        return 1
+                    fi
+
+                    # 更新配置文件中的端口号
+                    sed -i "s/^PORT=\"$PORT\"/PORT=\"$new_port\"/" "$CONFIG_FILE"
+
+                    if [ $? -eq 0 ]; then
+                        print_success "监听端口已修改为 $new_port，请重新启动WebSocket代理服务"
+                    else
+                        print_error "修改配置文件失败，请手动修改配置文件中的PORT值"
+                    fi
+                else
+                    grep -i "error" "$DOMAIN_DIR/node.log" | head -3 | while read -r line; do
+                        echo -e "${RED}$line${NC}"
+                    done
+                fi
             fi
 
             return 1
@@ -618,16 +669,10 @@ start_nezha_process() {
     print_info "启动哪吒探针..."
     cd "$HOME"
 
-    # 根据配置决定使用哪吒v0还是v1
-    if [ -n "$NEZHA_PORT" ]; then
-        # 使用哪吒v0
-        print_info "使用哪吒v0..."
-        env NZ_SERVER="$NEZHA_SERVER" NZ_PORT="$NEZHA_PORT" NZ_KEY="$NEZHA_KEY" NZ_TLS="$NEZHA_TLS" ./agent.sh > /dev/null 2>&1 &
-    else
-        # 使用哪吒v1
-        print_info "使用哪吒v1..."
-        env NZ_SERVER="$NEZHA_SERVER" NZ_TLS=$NEZHA_TLS NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
-    fi
+    # 统一使用环境变量方式启动哪吒探针
+    print_info "启动哪吒探针..."
+    # 设置所有可能的环境变量，让agent.sh自行判断使用哪些
+    env NZ_SERVER="$NEZHA_SERVER" NZ_PORT="$NEZHA_PORT" NZ_KEY="$NEZHA_KEY" NZ_TLS="$NEZHA_TLS" NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
 }
 
 # 强制重新安装
@@ -771,33 +816,57 @@ main() {
 
 # 检查并启动所有服务（用于Cron任务）
 check_and_start_all() {
-    # 创建日志目录（如果不存在）
-    mkdir -p "$LOG_DIR"
+    # 创建日志目录和固定的cron日志文件
+    CRON_LOG="$HOME/tmp/ws_setup_logs/cron_autorestart.log"
+    mkdir -p "$HOME/tmp/ws_setup_logs"
+
+    # 如果日志文件超过1MB，则清空它
+    if [ -f "$CRON_LOG" ] && [ $(stat -c%s "$CRON_LOG" 2>/dev/null || stat -f%z "$CRON_LOG" 2>/dev/null) -gt 1048576 ]; then
+        echo "=== 日志文件已重置 $(date) ===" > "$CRON_LOG"
+    fi
 
     # 加载配置
-    if [ -f "$CONFIG_FILE" ]; then
-        source "$CONFIG_FILE"
+    if [ -f "$HOME/tmp/ws_config/ws_config.conf" ]; then
+        source "$HOME/tmp/ws_config/ws_config.conf"
 
         # 检查并启动哪吒探针
         if ! pgrep -u "$USER" -f "nezha-agent" > /dev/null && [ -n "$NEZHA_SERVER" ] && [ -n "$NEZHA_KEY" ]; then
-            # 使用通用函数启动哪吒探针
-            start_nezha_process
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 哪吒探针已启动" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 哪吒探针未运行，正在启动..." >> "$CRON_LOG"
+
+            # 确保agent.sh存在
+            if [ ! -f "$HOME/agent.sh" ]; then
+                cd "$HOME"
+                curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/refs/heads/main/agent.sh -o agent.sh && chmod +x agent.sh
+            fi
+
+            # 直接启动哪吒探针
+            cd "$HOME"
+            env NZ_SERVER="$NEZHA_SERVER" NZ_PORT="$NEZHA_PORT" NZ_KEY="$NEZHA_KEY" NZ_TLS="$NEZHA_TLS" NZ_UUID="$UUID" NZ_CLIENT_SECRET="$NEZHA_KEY" ./agent.sh > /dev/null 2>&1 &
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 哪吒探针启动命令已执行" >> "$CRON_LOG"
         fi
 
         # 检查并启动WebSocket服务
         if [ -n "$DOMAIN" ] && [ -n "$DOMAIN_DIR" ]; then
-            # 使用check_processes函数检测进程状态
-            check_processes
+            # 使用简化的进程检测
+            NODE_RUNNING=false
+            if ps aux | grep "lsnode:" | grep -v grep > /dev/null || ps aux | grep "node index.js" | grep -v grep > /dev/null; then
+                NODE_RUNNING=true
+            fi
 
             # 如果WebSocket服务未运行，尝试通过curl访问订阅地址来启动它
             if [ "$NODE_RUNNING" = false ]; then
-                curl -s -o /dev/null "https://$DOMAIN/sub"
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试通过访问订阅地址启动WebSocket服务" >> "$LOG_FILE"
+                # 先检查日志文件中是否有端口占用错误
+                if [ -f "$DOMAIN_DIR/node.log" ] && (grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log" || grep -q "address already in use" "$DOMAIN_DIR/node.log"); then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 检测到端口 $PORT 已被占用，无法启动WebSocket服务" >> "$CRON_LOG"
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 请手动修改配置文件使用其他端口" >> "$CRON_LOG"
+                else
+                    curl -s -o /dev/null "https://$DOMAIN/sub"
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试通过访问订阅地址启动WebSocket服务" >> "$CRON_LOG"
+                fi
             fi
         fi
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 配置文件不存在，无法启动服务" >> "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] 配置文件不存在，无法启动服务" >> "$CRON_LOG"
     fi
 }
 

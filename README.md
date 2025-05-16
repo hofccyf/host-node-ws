@@ -28,9 +28,9 @@
 - 自动安装和配置WebSocket服务
 - 可选安装和配置哪吒探针（支持v0和v1版本自动识别）
 - 支持自定义反代域名
-- 多协议支持（VLESS/VMess/Trojan）
-- 支持订阅单一协议或全部协议
-- 显示订阅地址，节点名称包含协议类型
+- 支持VLESS协议
+- 提供Base64编码的订阅地址
+- 简洁高效的代理服务
 - 运行统计功能
 - 详细的日志记录
 
@@ -41,7 +41,7 @@
 一键下载并运行脚本：
 
 ```bash
-curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh -o setup.sh && chmod +x setup.sh && ./setup.sh
+curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup-ws.sh -o setup-ws.sh && chmod +x setup-ws.sh && ./setup-ws.sh
 ```
 
 ### 功能选项
@@ -50,7 +50,7 @@ curl -L https://raw.githubusercontent.com/mqiancheng/host-node-ws/main/setup.sh 
 
 1. **修改配置文件**：
    - 设置域名、节点名称、端口、UUID等配置信息
-   - 选择代理协议（VLESS/VMess/Trojan/全部）
+   - 使用VLESS代理协议
    - 可选配置哪吒探针服务器地址和密钥（自动识别v0/v1版本）
    - 所有配置信息保存在`~/tmp/ws_config/ws_config.conf`文件中
 
@@ -169,14 +169,12 @@ VLESS链接使用您配置的反代域名作为服务器地址，使用您的实
 
 **系统重启后自动启动服务**：
 - 选择"Run on @reboot"选项
-- 命令：`cd $HOME && $HOME/setup.sh check_and_start_all`（如果使用统一入口脚本）
-- 或者：`cd $HOME && $HOME/setup-ws.sh check_and_start_all`（如果直接使用WebSocket模式脚本）
+- 命令：`cd $HOME && $HOME/setup-ws.sh check_and_start_all`
 - 如果您担心收到电子邮件通知，请选择"阻止电子邮件"选项
 
 **定期检查并重启服务**：
 - 频率：每5-10分钟（Cron表达式：`*/10 * * * *`）
-- 命令：`cd $HOME && $HOME/setup.sh check_and_start_all`（如果使用统一入口脚本）
-- 或者：`cd $HOME && $HOME/setup-ws.sh check_and_start_all`（如果直接使用WebSocket模式脚本）
+- 命令：`cd $HOME && $HOME/setup-ws.sh check_and_start_all`
 - 如果您担心收到电子邮件通知，请选择"阻止电子邮件"选项
 
 > **注意**：许多共享主机的控制面板在选择"阻止电子邮件"选项时会自动在命令末尾添加重定向（如 `>/dev/null 2>&1`）。这是正常现象，不会影响脚本的执行。即使出现重复的重定向也不用担心，命令仍然可以正常工作。
@@ -201,7 +199,6 @@ VLESS链接使用您配置的反代域名作为服务器地址，使用您的实
 - 哪吒探针服务器地址格式会自动识别v0/v1版本
 - 强制重新安装会删除所有相关文件和日志
 - 自动保活功能需要先运行脚本并完成配置
-- 统一入口脚本会自动下载缺失的脚本文件
 - 配置信息保存在`~/tmp/ws_config/ws_config.conf`文件中
 - 日志文件存储在`~/tmp/ws_setup_logs/`目录下
 - 仅支持VLESS协议

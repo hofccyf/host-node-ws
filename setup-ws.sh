@@ -515,7 +515,7 @@ EOF
             # 检查日志文件中是否有错误信息
             if grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log" || grep -q "address already in use" "$DOMAIN_DIR/node.log"; then
                 print_error "WebSocket服务启动失败: 端口 $PORT 已被占用"
-                echo -e "${RED}在共享服务器环境中，即使本机没有使用该端口，其他主机可能已占用该端口${NC}"
+
 
                 # 提示用户输入新的端口号
                 echo
@@ -552,7 +552,7 @@ EOF
             # 检查端口占用错误
             if [ -f "$DOMAIN_DIR/node.log" ] && (grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log" || grep -q "address already in use" "$DOMAIN_DIR/node.log"); then
                 print_error "检测到端口 $PORT 已被占用"
-                echo -e "${RED}在共享服务器环境中，即使本机没有使用该端口，其他主机可能已占用该端口${NC}"
+
 
                 # 提示用户输入新的端口号
                 echo

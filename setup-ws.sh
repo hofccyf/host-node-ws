@@ -547,8 +547,6 @@ EOF
             echo -e "${GREEN}您的VLESS订阅地址是：${NC}https://${DOMAIN}/sub"
         else
             print_error "WebSocket服务启动失败，进程未运行"
-            echo -e "${RED}请检查日志文件: $DOMAIN_DIR/node.log${NC}"
-
             # 检查端口占用错误
             if [ -f "$DOMAIN_DIR/node.log" ] && (grep -q "EADDRINUSE" "$DOMAIN_DIR/node.log" || grep -q "address already in use" "$DOMAIN_DIR/node.log"); then
                 print_error "检测到端口 $PORT 已被占用"
